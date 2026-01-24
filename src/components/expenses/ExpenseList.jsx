@@ -1,6 +1,5 @@
-import React from 'react';
 import { format } from 'date-fns';
-import { Tag, User, FileText, MoreHorizontal, Image as ImageIcon, ExternalLink, Pencil, Images } from 'lucide-react';
+import { User, MoreHorizontal, Image as ImageIcon, Pencil, Images } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,

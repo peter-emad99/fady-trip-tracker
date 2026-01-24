@@ -1,7 +1,5 @@
-import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Plane, LayoutGrid, Settings } from 'lucide-react';
-import { createPageUrl } from './utils';
+import { Plane, LayoutGrid } from 'lucide-react';
 
 export default function Layout({ children }) {
   const location = useLocation();

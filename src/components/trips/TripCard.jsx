@@ -1,7 +1,6 @@
-import React from 'react';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
-import { Calendar, ChevronRight, DollarSign, TrendingUp } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import { createPageUrl } from '@/utils';
 import { Progress } from '@/components/ui/progress';
 

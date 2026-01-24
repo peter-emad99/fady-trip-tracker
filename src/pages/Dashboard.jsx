@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
-import { Plus, FolderPlus, Search } from 'lucide-react';
+import { supabase } from '@/api/supabaseClient';
+import { FolderPlus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -15,21 +15,38 @@ export default function Dashboard() {
 
   const { data: trips, isLoading: tripsLoading } = useQuery({
     queryKey: ['trips'],
-    queryFn: () => base44.entities.Trip.list('-start_date'),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('trips')
+        .select('*')
+        .order('start_date', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
     initialData: []
   });
 
   const { data: expenses, isLoading: expensesLoading } = useQuery({
     queryKey: ['expenses'],
-    queryFn: () => base44.entities.Expense.list(), // We load all expenses to calculate totals on dashboard. For scale, this should be done differently (e.g. separate aggregation entity or backend function), but fine for this scale.
+    queryFn: async () => {
+      const { data, error } = await supabase.from('expenses').select('*');
+      if (error) throw error;
+      return data;
+    },
+    // We load all expenses to calculate totals on dashboard. For scale, this should be done differently (e.g. separate aggregation entity or backend function), but fine for this scale.
     initialData: []
   });
 
   const createTripMutation = useMutation({
-    mutationFn: (data) => base44.entities.Trip.create({
-      ...data,
-      received_amount: parseFloat(data.received_amount)
-    }),
+    mutationFn: async (data) => {
+      const { data: newTrip, error } = await supabase.from('trips').insert({
+        ...data,
+        received_amount: parseFloat(data.received_amount)
+      }).select().single();
+      
+      if (error) throw error;
+      return newTrip;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trips'] });
       setIsCreateOpen(false);

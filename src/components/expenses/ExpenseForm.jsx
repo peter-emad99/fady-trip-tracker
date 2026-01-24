@@ -1,13 +1,12 @@
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
-import { X, Upload, Camera, Calendar, Tag, DollarSign, User, Trash2, Plus } from 'lucide-react';
+import { X, Calendar, Tag, User, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { base44 } from '@/api/base44Client';
+import { supabase } from '@/api/supabaseClient';
 
 export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose, onSuccess }) {
   const { register, handleSubmit, setValue, watch, getValues, formState: { errors, isSubmitting } } = useForm({
@@ -31,7 +30,21 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
 
       setUploading(true);
       try {
-      const uploadPromises = files.map(file => base44.integrations.Core.UploadFile({ file }));
+      const uploadPromises = files.map(async (file) => {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('receipts')
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage.from('receipts').getPublicUrl(filePath);
+        return { file_url: data.publicUrl };
+      });
+
       const results = await Promise.all(uploadPromises);
       const newUrls = results.map(r => r.file_url);
 
@@ -61,9 +74,11 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       };
 
       if (expenseToEdit) {
-        await base44.entities.Expense.update(expenseToEdit.id, cleanData);
+        const { error } = await supabase.from('expenses').update(cleanData).eq('id', expenseToEdit.id);
+        if (error) throw error;
       } else {
-        await base44.entities.Expense.create(cleanData);
+        const { error } = await supabase.from('expenses').insert(cleanData);
+        if (error) throw error;
       }
       onSuccess();
     } catch (error) {
