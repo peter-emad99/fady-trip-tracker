@@ -1,0 +1,1 @@
+const NavigationTracker = () => null; export default NavigationTracker;

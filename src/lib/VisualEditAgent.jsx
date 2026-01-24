@@ -1,0 +1,1 @@
+const VisualEditAgent = () => null; export default VisualEditAgent;

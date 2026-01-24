@@ -1,0 +1,46 @@
+{
+  "name": "Expense",
+  "type": "object",
+  "properties": {
+    "trip_id": {
+      "type": "string",
+      "description": "ID of the related Trip"
+    },
+    "category": {
+      "type": "string",
+      "description": "Category name"
+    },
+    "cost": {
+      "type": "number"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "assigned_to": {
+      "type": "string",
+      "description": "Who this expense is assigned to or paid by"
+    },
+    "receipt_urls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "URLs of uploaded receipt images"
+    },
+    "receipt_url": {
+      "type": "string",
+      "description": "Legacy single receipt URL"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "trip_id",
+    "cost",
+    "category",
+    "date"
+  ]
+}
