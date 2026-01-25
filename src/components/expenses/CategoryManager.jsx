@@ -141,28 +141,41 @@ export default function CategoryManager() {
                   </div>
                 ) : (
                   <>
-                    <span className="text-sm font-medium text-slate-700">{cat.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-700">{cat.name}</span>
+                      {!cat.user_id && (
+                        <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase tracking-wider font-bold">
+                          System
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1">
-                      <Button 
-                        size="icon" 
-                        variant="ghost" 
-                        className="h-8 w-8 text-slate-400 hover:text-indigo-600"
-                        onClick={() => startEdit(cat)}
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button 
-                        size="icon" 
-                        variant="ghost" 
-                        className="h-8 w-8 text-slate-400 hover:text-red-600"
-                        onClick={() => {
-                          if(confirm('Are you sure? Expenses with this category will remain, but the category itself will be gone.')) {
-                            deleteMutation.mutate(cat.id);
-                          }
-                        }}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                      {cat.user_id ? (
+                        <>
+                          <Button 
+                            size="icon" 
+                            variant="ghost" 
+                            className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                            onClick={() => startEdit(cat)}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button 
+                            size="icon" 
+                            variant="ghost" 
+                            className="h-8 w-8 text-slate-400 hover:text-red-600"
+                            onClick={() => {
+                              if(confirm('Are you sure? Expenses with this category will remain, but the category itself will be gone.')) {
+                                deleteMutation.mutate(cat.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 italic mr-2">Locked</span>
+                      )}
                     </div>
                   </>
                 )}

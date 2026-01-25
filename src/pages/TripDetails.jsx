@@ -84,7 +84,7 @@ export default function TripDetails() {
     return expenses.filter(
       (e) =>
         e.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        e.notes?.toLowerCase().includes(searchTerm.toLowerCase())
+        e.notes?.toLowerCase().includes(searchTerm.toLowerCase()),
     );
   }, [expenses, searchTerm]);
 
@@ -146,7 +146,7 @@ export default function TripDetails() {
         .update({
           ...data,
           received_amount: parseFloat(data.received_amount),
-          user_id: user.id
+          user_id: user.id,
         })
         .eq("id", id);
       if (error) throw error;
@@ -390,17 +390,8 @@ export default function TripDetails() {
         </TabsList>
 
         <TabsContent value="list" className="pb-20">
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              placeholder="Search expenses..."
-              className="pl-10 bg-white border-gray-200 focus:ring-indigo-500 rounded-xl"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
           <ExpenseList
-            expenses={filteredExpenses}
+            expenses={expenses || []}
             onDelete={(id) => deleteExpenseMutation.mutate(id)}
             onEdit={(expense) => {
               setEditingExpense(expense);
