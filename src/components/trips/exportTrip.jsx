@@ -96,61 +96,88 @@ export const exportTripToPDF = async (trip, expenses) => {
     yPos += 8;
   }
 
-  // Receipts Section
-  yPos += 20;
-  checkPageBreak(40);
-  
-  doc.setFontSize(16);
-  doc.setTextColor(0, 0, 0);
-  doc.text('Receipts', margin, yPos);
-  yPos += 15;
+  // Detailed Pages Section (One expense per page)
+  for (const expense of sortedExpenses) {
+    doc.addPage();
+    yPos = margin;
 
-  const expensesWithReceipts = sortedExpenses.filter(e => e.receipt_urls?.length > 0 || e.receipt_url);
-  
-  if (expensesWithReceipts.length === 0) {
-    doc.setFontSize(10);
-    doc.setTextColor(150, 150, 150);
-    doc.text('No receipts attached.', margin, yPos);
-  } else {
-    for (const expense of expensesWithReceipts) {
-      const urls = expense.receipt_urls?.length > 0 ? expense.receipt_urls : [expense.receipt_url];
-      
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(0, 0, 0);
+    doc.text(expense.category || 'Other', margin, yPos);
+    
+    doc.setFontSize(18);
+    doc.text(`EGP ${expense.cost?.toFixed(2)}`, pageWidth - margin, yPos, { align: 'right' });
+    yPos += 15;
+
+    // Metadata
+    doc.setFontSize(11);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Date: ${new Date(expense.date).toLocaleDateString()}`, margin, yPos);
+    
+    if (expense.assigned_to) {
+        doc.text(`Assigned to: ${expense.assigned_to}`, pageWidth - margin, yPos, { align: 'right' });
+    }
+    yPos += 10;
+
+    // Notes
+    if (expense.notes) {
+      doc.setFontSize(12);
+      doc.setTextColor(50, 50, 50);
+      const splitNotes = doc.splitTextToSize(`Notes: ${expense.notes}`, pageWidth - (margin * 2));
+      doc.text(splitNotes, margin, yPos);
+      yPos += (splitNotes.length * 7) + 15;
+    } else {
+      yPos += 10;
+    }
+
+    // Receipts for this specific expense
+    const urls = expense.receipt_urls?.length > 0 ? expense.receipt_urls : (expense.receipt_url ? [expense.receipt_url] : []);
+    
+    if (urls.length > 0) {
+      doc.setDrawColor(220, 220, 220);
+      doc.line(margin, yPos, pageWidth - margin, yPos);
+      yPos += 12;
+
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.text('Receipts:', margin, yPos);
+      yPos += 10;
+
       for (let i = 0; i < urls.length; i++) {
-          const url = urls[i];
-          checkPageBreak(80); // Check if enough space
-
-          doc.setFontSize(11);
-          doc.setTextColor(0, 0, 0);
-          const title = `${expense.category} - EGP ${expense.cost} (${new Date(expense.date).toLocaleDateString()})${urls.length > 1 ? ` (${i+1}/${urls.length})` : ''}`;
-          doc.text(title, margin, yPos);
-          yPos += 7;
+        const url = urls[i];
+        
+        try {
+          const imgData = await getImageData(url);
+          const props = doc.getImageProperties(imgData);
+          const maxWidth = pageWidth - (margin * 2);
+          const maxHeight = 160; 
           
-          try {
-            const imgData = await getImageData(url);
-            const props = doc.getImageProperties(imgData);
-            const maxWidth = pageWidth - (margin * 2);
-            const maxHeight = 120; // Slightly larger for better visibility
-            
-            let w = props.width;
-            let h = props.height;
-            
-            if (w > maxWidth) {
-              h = (h * maxWidth) / w;
-              w = maxWidth;
-            }
-            if (h > maxHeight) {
-              w = (w * maxHeight) / h;
-              h = maxHeight;
-            }
-
-            doc.addImage(imgData, 'JPEG', margin, yPos, w, h);
-            yPos += h + 15;
-          } catch (e) {
-            doc.setFontSize(9);
-            doc.setTextColor(200, 50, 50);
-            doc.text('[Error loading image]', margin, yPos);
-            yPos += 15;
+          let w = props.width;
+          let h = props.height;
+          
+          if (w > maxWidth) {
+            h = (h * maxWidth) / w;
+            w = maxWidth;
           }
+          if (h > maxHeight) {
+            w = (w * maxHeight) / h;
+            h = maxHeight;
+          }
+
+          if (yPos + h > pageHeight - margin) {
+            doc.addPage();
+            yPos = margin;
+          }
+
+          doc.addImage(imgData, 'JPEG', margin, yPos, w, h);
+          yPos += h + 15;
+        } catch (e) {
+          doc.setFontSize(9);
+          doc.setTextColor(200, 50, 50);
+          doc.text(`[Error loading receipt ${i + 1}]`, margin, yPos);
+          yPos += 10;
+        }
       }
     }
   }
