@@ -6,7 +6,7 @@ export const AuthProvider = ({ children }) => {
   // Mock auth for development
   const [user, setUser] = useState({ 
     id: 'user_123', 
-    email: 'demo@base44.com',
+    email: 'demo@trippy.com',
     name: 'Demo User'
   });
   

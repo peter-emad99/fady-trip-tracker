@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
-import { X, Calendar, Tag, User, Plus } from 'lucide-react';
+import { X, Upload, Camera, Calendar, Tag, DollarSign, User, Trash2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/api/supabaseClient';
 
@@ -23,6 +24,9 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
 
       const [uploading, setUploading] = React.useState(false);
       const fileInputRef = React.useRef(null);
+      
+      // Generate a consistent ID for new expenses to allow file association before save
+      const expenseId = useMemo(() => expenseToEdit?.id || crypto.randomUUID(), [expenseToEdit]);
 
       const handleFileUpload = async (e) => {
       const files = Array.from(e.target.files);
@@ -32,7 +36,8 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       try {
       const uploadPromises = files.map(async (file) => {
         const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+        // Prefix filename with expenseId
+        const fileName = `${expenseId}_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
         const filePath = `${fileName}`;
 
         const { error: uploadError } = await supabase.storage
@@ -59,8 +64,28 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       }
       };
 
-      const removeReceipt = (indexToRemove) => {
+      const removeReceipt = async (indexToRemove) => {
       const currentUrls = getValues('receipt_urls') || [];
+      const urlToRemove = currentUrls[indexToRemove];
+
+      if (urlToRemove) {
+        try {
+          // Extract the file path from the public URL
+          // Format: .../receipts/<filename>
+          const path = urlToRemove.split('/receipts/').pop();
+          if (path) {
+            const { error } = await supabase.storage.from('receipts').remove([path]);
+            if (error) {
+              console.error('Failed to delete file from storage', error);
+              // We continue to remove it from UI even if storage delete fails
+              // to prevent UI from being stuck
+            }
+          }
+        } catch (err) {
+          console.error('Error removing receipt:', err);
+        }
+      }
+
       setValue('receipt_urls', currentUrls.filter((_, index) => index !== indexToRemove));
       };
 
@@ -77,7 +102,11 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
         const { error } = await supabase.from('expenses').update(cleanData).eq('id', expenseToEdit.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from('expenses').insert(cleanData);
+        // Use the pre-generated ID for the new record
+        const { error } = await supabase.from('expenses').insert({
+          ...cleanData,
+          id: expenseId
+        });
         if (error) throw error;
       }
       onSuccess();

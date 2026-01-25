@@ -85,6 +85,34 @@ export default function TripDetails() {
 
   const deleteExpenseMutation = useMutation({
     mutationFn: async (expenseId) => {
+      // First, get the expense to retrieve receipt URLs
+      const { data: expense } = await supabase
+        .from("expenses")
+        .select("receipt_urls, receipt_url")
+        .eq("id", expenseId)
+        .single();
+
+      // Delete receipt files from storage
+      if (expense) {
+        const urlsToDelete =
+          expense.receipt_urls ||
+          (expense.receipt_url ? [expense.receipt_url] : []);
+
+        for (const url of urlsToDelete) {
+          try {
+            // Extract file path from URL
+            const urlParts = url.split("/receipts/");
+            if (urlParts.length > 1) {
+              const filePath = urlParts[1].split("?")[0]; // Remove query params
+              await supabase.storage.from("receipts").remove([filePath]);
+            }
+          } catch (err) {
+            console.error("Failed to delete receipt file:", err);
+          }
+        }
+      }
+
+      // Then delete the expense record
       const { error } = await supabase
         .from("expenses")
         .delete()

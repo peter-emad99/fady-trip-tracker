@@ -102,7 +102,7 @@ export default function TripExport({ trip, expenses }) {
         try {
           // Add image to PDF
           // Note: fetching images can be tricky due to CORS. 
-          // Assuming base44 storage headers allow it or we use a proxy/workaround if needed.
+          // Assuming Supabase storage headers allow it or we use a proxy/workaround if needed.
           // For this implementation, we'll try adding it directly.
           const imgExt = expense.receipt_url.split('.').pop().toLowerCase();
           const format = imgExt === 'png' ? 'PNG' : 'JPEG';
