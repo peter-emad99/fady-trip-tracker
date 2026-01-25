@@ -1,8 +1,10 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Plane, LayoutGrid } from 'lucide-react';
+import { Plane, LayoutGrid, LogOut } from 'lucide-react';
+import { useAuth } from '@/lib/AuthContext';
 
 export default function Layout({ children }) {
   const location = useLocation();
+  const { logout } = useAuth();
   const isHome = location.pathname === '/';
 
   return (
@@ -22,6 +24,9 @@ export default function Layout({ children }) {
                 <LayoutGrid className="w-5 h-5" />
               </button>
             </Link>
+            <button onClick={logout} className="p-2 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors" title="Sign Out">
+              <LogOut className="w-5 h-5" />
+            </button>
           </div>
         </div>
       </nav>
