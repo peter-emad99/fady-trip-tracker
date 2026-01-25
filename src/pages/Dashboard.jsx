@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/api/supabaseClient';
+import { useAuth } from '@/lib/AuthContext';
 import { FolderPlus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +12,7 @@ import TripCard from '../components/trips/TripCard';
 export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const { data: trips, isLoading: tripsLoading } = useQuery({
@@ -41,7 +43,8 @@ export default function Dashboard() {
     mutationFn: async (data) => {
       const { data: newTrip, error } = await supabase.from('trips').insert({
         ...data,
-        received_amount: parseFloat(data.received_amount)
+        received_amount: parseFloat(data.received_amount),
+        user_id: user.id
       }).select().single();
       
       if (error) throw error;

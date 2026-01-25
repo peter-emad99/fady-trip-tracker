@@ -8,8 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/api/supabaseClient';
+import { useAuth } from '@/lib/AuthContext';
 
 export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose, onSuccess }) {
+  const { user } = useAuth();
   const { register, handleSubmit, setValue, watch, getValues, formState: { errors, isSubmitting } } = useForm({
     defaultValues: {
       date: expenseToEdit?.date || new Date().toISOString().split('T')[0],
@@ -95,7 +97,8 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
           ...data,
           cost: parseFloat(data.cost),
           // Ensure backward compatibility or cleanup
-          receipt_url: data.receipt_urls?.[0] || null 
+          receipt_url: data.receipt_urls?.[0] || null,
+          user_id: user.id
       };
 
       if (expenseToEdit) {

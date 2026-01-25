@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase } from "@/api/supabaseClient";
+import { useAuth } from "@/lib/AuthContext";
 import { format } from "date-fns";
 import {
   Plus,
@@ -37,6 +38,7 @@ import { exportTripToPDF } from "../components/trips/exportTrip";
 export default function TripDetails() {
   const urlParams = new URLSearchParams(window.location.search);
   const id = urlParams.get("id");
+  const { user } = useAuth();
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -130,6 +132,7 @@ export default function TripDetails() {
         .update({
           ...data,
           received_amount: parseFloat(data.received_amount),
+          user_id: user.id
         })
         .eq("id", id);
       if (error) throw error;
