@@ -15,6 +15,7 @@ import {
   List as ListIcon,
   Pencil,
   Download,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -43,6 +44,7 @@ export default function TripDetails() {
   const [editingExpense, setEditingExpense] = useState(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const queryClient = useQueryClient();
 
   // Fetch Trip
@@ -67,12 +69,24 @@ export default function TripDetails() {
       const { data, error } = await supabase
         .from("expenses")
         .select("*")
-        .eq("trip_id", id);
+        .eq("trip_id", id)
+        .order("date", { ascending: false })
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
     enabled: !!id,
   });
+
+  // Filtered Expenses
+  const filteredExpenses = useMemo(() => {
+    if (!expenses) return [];
+    return expenses.filter(
+      (e) =>
+        e.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        e.notes?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [expenses, searchTerm]);
 
   // Fetch Categories
   const { data: categories } = useQuery({
@@ -376,8 +390,17 @@ export default function TripDetails() {
         </TabsList>
 
         <TabsContent value="list" className="pb-20">
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              placeholder="Search expenses..."
+              className="pl-10 bg-white border-gray-200 focus:ring-indigo-500 rounded-xl"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
           <ExpenseList
-            expenses={expenses || []}
+            expenses={filteredExpenses}
             onDelete={(id) => deleteExpenseMutation.mutate(id)}
             onEdit={(expense) => {
               setEditingExpense(expense);

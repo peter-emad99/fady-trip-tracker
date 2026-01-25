@@ -22,11 +22,11 @@ export default function ExpenseList({ expenses, onDelete, onEdit }) {
     );
   }
 
-  // Sort by date desc, then created_date desc
+  // Sort by date desc, then created_at desc
   const sortedExpenses = [...expenses].sort((a, b) => {
     const dateDiff = new Date(b.date) - new Date(a.date);
     if (dateDiff !== 0) return dateDiff;
-    return new Date(b.created_date || 0) - new Date(a.created_date || 0);
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
   });
 
   return (

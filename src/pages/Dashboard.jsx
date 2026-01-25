@@ -21,7 +21,8 @@ export default function Dashboard() {
       const { data, error } = await supabase
         .from('trips')
         .select('*')
-        .order('start_date', { ascending: false });
+        .order('start_date', { ascending: false })
+        .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -31,7 +32,11 @@ export default function Dashboard() {
   const { data: expenses, isLoading: expensesLoading } = useQuery({
     queryKey: ['expenses'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('expenses').select('*');
+      const { data, error } = await supabase
+        .from('expenses')
+        .select('*')
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
     },

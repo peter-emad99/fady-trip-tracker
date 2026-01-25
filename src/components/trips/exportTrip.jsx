@@ -77,7 +77,7 @@ export const exportTripToPDF = async (trip, expenses) => {
     const dateA = new Date(a.date);
     const dateB = new Date(b.date);
     if (dateB - dateA !== 0) return dateB - dateA;
-    return new Date(b.created_date || 0) - new Date(a.created_date || 0);
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
   });
 
   for (const expense of sortedExpenses) {
