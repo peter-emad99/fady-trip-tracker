@@ -159,8 +159,8 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
           {/* Category Selection */}
           <div className="space-y-2">
             <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Category</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {categories.map((cat) => (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {categories?.map((cat) => (
                 <label
                   key={cat.id}
                   className={`
@@ -176,11 +176,15 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
                     className="sr-only"
                     {...register('category')}
                   />
-                  {/* Ideally we would map icon name to component here, simplified for now */}
                   <Tag className="w-5 h-5 mb-1.5 opacity-70" />
-                  <span className="text-xs font-medium">{cat.name}</span>
+                  <span className="text-xs font-medium text-center line-clamp-1">{cat.name}</span>
                 </label>
               ))}
+              {categories?.length === 0 && (
+                <p className="col-span-full text-center text-xs text-slate-500 py-4 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                  No categories found. Please add some in the Dashboard.
+                </p>
+              )}
             </div>
           </div>
 

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import TripCard from '../components/trips/TripCard';
+import CategoryManager from '../components/expenses/CategoryManager';
 
 export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -78,13 +79,15 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold text-slate-900">My Trips</h1>
           <p className="text-slate-500 mt-1">Manage your travel budgets and expenses</p>
         </div>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 rounded-full px-6">
-              <FolderPlus className="w-4 h-4 mr-2" />
-              New Trip
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          <CategoryManager />
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 rounded-full px-6">
+                <FolderPlus className="w-4 h-4 mr-2" />
+                New Trip
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create New Trip</DialogTitle>
@@ -120,6 +123,7 @@ export default function Dashboard() {
             </form>
           </DialogContent>
         </Dialog>
+      </div>
       </header>
 
       {/* Search */}
