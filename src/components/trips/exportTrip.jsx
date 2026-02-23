@@ -55,7 +55,49 @@ export const exportTripToPDF = async (trip, expenses) => {
   
   yPos += 25;
 
+  // Category Breakdown
+  const categoryTotals = expenses.reduce((acc, curr) => {
+    const cat = curr.category || 'Other';
+    acc[cat] = (acc[cat] || 0) + (curr.cost || 0);
+    return acc;
+  }, {});
+
+  checkPageBreak(30); // Ensure space for header
+
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
+  doc.text('Category Breakdown', margin, yPos);
+  yPos += 8;
+
+  doc.setFontSize(10);
+  doc.setTextColor(100, 100, 100);
+  
+  // Table Header
+  doc.text('CATEGORY', margin, yPos);
+  doc.text('TOTAL', margin + 80, yPos);
+  yPos += 3;
+  
+  doc.setDrawColor(220, 220, 220);
+  doc.line(margin, yPos, margin + 120, yPos);
+  yPos += 7;
+
+  doc.setTextColor(0, 0, 0);
+  
+  // Sort categories by amount descending
+  const sortedCategories = Object.entries(categoryTotals)
+    .sort(([, a], [, b]) => b - a);
+
+  for (const [cat, amount] of sortedCategories) {
+    checkPageBreak(7);
+    doc.text(cat, margin, yPos);
+    doc.text(`EGP ${amount.toLocaleString()}`, margin + 80, yPos);
+    yPos += 7;
+  }
+
+  yPos += 15;
+
   // Expenses Table Header
+  checkPageBreak(20);
   doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
   doc.text('DATE', margin, yPos);
