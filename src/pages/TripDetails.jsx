@@ -15,7 +15,6 @@ import {
   List as ListIcon,
   Pencil,
   Download,
-  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -44,7 +43,6 @@ export default function TripDetails() {
   const [editingExpense, setEditingExpense] = useState(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
   const queryClient = useQueryClient();
 
   // Fetch Trip
@@ -77,16 +75,6 @@ export default function TripDetails() {
     },
     enabled: !!id,
   });
-
-  // Filtered Expenses
-  const filteredExpenses = useMemo(() => {
-    if (!expenses) return [];
-    return expenses.filter(
-      (e) =>
-        e.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        e.notes?.toLowerCase().includes(searchTerm.toLowerCase()),
-    );
-  }, [expenses, searchTerm]);
 
   // Fetch Categories
   const { data: categories } = useQuery({
