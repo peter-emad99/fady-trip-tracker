@@ -22,6 +22,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { format } from "date-fns";
 
 export default function TripBudget() {
   const [searchParams] = useSearchParams();
@@ -30,6 +31,7 @@ export default function TripBudget() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState(null);
+  const [selectedBudget, setSelectedBudget] = useState(null);
   const queryClient = useQueryClient();
 
   // Fetch Trip
@@ -86,6 +88,22 @@ export default function TripBudget() {
       }));
     },
     enabled: !!id,
+  });
+
+  // Fetch expenses for selected budget
+  const { data: budgetExpenses, isLoading: budgetExpensesLoading } = useQuery({
+    queryKey: ["budgetExpenses", selectedBudget?.id],
+    queryFn: async () => {
+      if (!selectedBudget?.id) return [];
+      const { data, error } = await supabase
+        .from("expenses")
+        .select("*")
+        .eq("trip_budget_id", selectedBudget.id)
+        .order("date", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedBudget?.id,
   });
 
   // Create budget mutation
@@ -348,8 +366,17 @@ export default function TripBudget() {
                       <td className="px-6 py-4 text-right text-gray-600 whitespace-nowrap">
                         EGP {budget.amount?.toLocaleString()}
                       </td>
-                      <td className="px-6 py-4 text-right text-amber-600 whitespace-nowrap">
-                        EGP {budget.spent?.toLocaleString()}
+                      <td className="px-6 py-4 text-right">
+                        {budget.spent > 0 ? (
+                          <button
+                            onClick={() => setSelectedBudget(budget)}
+                            className="text-amber-600 hover:text-amber-800 font-medium cursor-pointer"
+                          >
+                            EGP {budget.spent?.toLocaleString()}
+                          </button>
+                        ) : (
+                          <span className="text-gray-400">EGP 0</span>
+                        )}
                       </td>
                       <td
                         className={`px-6 py-4 text-right font-medium whitespace-nowrap ${isOverBudget ? "text-red-600" : "text-emerald-600"}`}
@@ -454,6 +481,42 @@ export default function TripBudget() {
                 </Button>
               </div>
             </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Budget Expenses Dialog */}
+      <Dialog open={!!selectedBudget} onOpenChange={() => setSelectedBudget(null)}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedBudget?.name} - Expenses
+            </DialogTitle>
+          </DialogHeader>
+          {budgetExpensesLoading ? (
+            <p className="text-center py-4">Loading...</p>
+          ) : budgetExpenses?.length === 0 ? (
+            <p className="text-center py-4 text-gray-500">No expenses found</p>
+          ) : (
+            <div className="space-y-3 mt-4">
+              {budgetExpenses?.map((expense) => (
+                <div
+                  key={expense.id}
+                  className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"
+                >
+                  <div>
+                    <p className="font-medium text-gray-900">{expense.category}</p>
+                    <p className="text-xs text-gray-500">
+                      {expense.date ? format(new Date(expense.date), "MMM d, yyyy") : "No date"}
+                      {expense.notes && ` - ${expense.notes.slice(0, 30)}`}
+                    </p>
+                  </div>
+                  <p className="font-medium text-amber-600">
+                    EGP {expense.cost?.toLocaleString()}
+                  </p>
+                </div>
+              ))}
+            </div>
           )}
         </DialogContent>
       </Dialog>
