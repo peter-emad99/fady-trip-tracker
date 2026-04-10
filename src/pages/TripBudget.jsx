@@ -178,8 +178,8 @@ export default function TripBudget() {
 
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">Trip Budgets</h1>
-            <p className="text-slate-500 mt-1">{trip.name}</p>
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Trip Budgets</p>
+            <h1 className="text-3xl font-bold text-slate-900">{trip.name}</h1>
           </div>
           <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
             <DialogTrigger asChild>
