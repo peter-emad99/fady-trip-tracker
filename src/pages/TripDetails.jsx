@@ -204,7 +204,7 @@ export default function TripDetails() {
           <ArrowLeft className="w-4 h-4 mr-1" /> Back to Trips
         </Link>
 
-        <div className="flex flex-wrap justify-between items-start gap-4">
+        <div className="flex justify-between items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">{trip.name}</h1>
             <div className="flex items-center gap-2 text-slate-500 mt-1">
@@ -218,7 +218,7 @@ export default function TripDetails() {
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
