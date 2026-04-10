@@ -304,7 +304,10 @@ export default function TripDetails() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-3 mb-8">
-        <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
+        <Link
+          to={`/TripBudget?id=${id}`}
+          className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 hover:bg-indigo-100 transition-colors cursor-pointer"
+        >
           <div className="flex items-center gap-2 mb-1 text-indigo-600">
             <Wallet className="w-4 h-4" />
             <span className="text-xs font-bold uppercase tracking-wider">
@@ -314,7 +317,7 @@ export default function TripDetails() {
           <p className="text-lg font-bold text-indigo-900">
             EGP {trip.received_amount?.toLocaleString()}
           </p>
-        </div>
+        </Link>
 
         <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
           <div className="flex items-center gap-2 mb-1 text-amber-600">

@@ -17,6 +17,7 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       date: expenseToEdit?.date || new Date().toISOString().split('T')[0],
       trip_id: tripId,
       category: expenseToEdit?.category || categories[0]?.name || 'Other',
+      trip_budget_id: expenseToEdit?.trip_budget_id || '',
       cost: expenseToEdit?.cost,
       assigned_to: expenseToEdit?.assigned_to || '',
       notes: expenseToEdit?.notes || '',
@@ -26,6 +27,20 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
 
       const [uploading, setUploading] = React.useState(false);
       const fileInputRef = React.useRef(null);
+      const [budgets, setBudgets] = React.useState([]);
+
+      // Fetch trip budgets
+      React.useEffect(() => {
+        if (tripId) {
+          supabase
+            .from('trip_budgets')
+            .select('*')
+            .eq('trip_id', tripId)
+            .then(({ data, error }) => {
+              if (!error && data) setBudgets(data);
+            });
+        }
+      }, [tripId]);
       
       // Generate a consistent ID for new expenses to allow file association before save
       const expenseId = useMemo(() => expenseToEdit?.id || crypto.randomUUID(), [expenseToEdit]);
@@ -188,7 +203,7 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
             </div>
           </div>
 
-          {/* Date & Assignee */}
+          {/* Date & Budget */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Date</Label>
@@ -202,16 +217,37 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Assigned To</Label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input 
-                  placeholder="Me" 
-                  className="pl-9"
-                  {...register('assigned_to')} 
-                />
-              </div>
+              <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Budget</Label>
+              <Select
+                value={watch('trip_budget_id')}
+                onValueChange={(value) => setValue('trip_budget_id', value)}
+              >
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Select budget (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {budgets.map((budget) => (
+                    <SelectItem key={budget.id} value={budget.id}>
+                      {budget.name} - EGP {budget.amount?.toLocaleString()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+          </div>
+
+          {/* Assigned To */}
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Assigned To</Label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input 
+                placeholder="Me" 
+                className="pl-9"
+                {...register('assigned_to')} 
+              />
+            </div>
+          </div>
           </div>
 
           {/* Notes */}
