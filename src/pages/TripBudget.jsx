@@ -95,13 +95,16 @@ export default function TripBudget() {
         trip_id: id,
         name: data.name,
         amount: parseFloat(data.amount),
-        user_id: user.id,
       });
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tripBudgets", id] });
       setIsAddOpen(false);
+    },
+    onError: (error) => {
+      console.error("Create budget failed:", error.message);
+      alert(`Failed to create budget: ${error.message}`);
     },
   });
 
