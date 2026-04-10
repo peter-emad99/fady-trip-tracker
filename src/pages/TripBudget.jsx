@@ -172,10 +172,25 @@ export default function TripBudget() {
   };
 
   // Calculations
-  const totalBudget = budgets?.reduce((acc, b) => acc + (b.amount || 0), 0) || 0;
+  const totalBudget = trip?.received_amount || 0;
+  const totalSubBudgets = budgets?.reduce((acc, b) => acc + (b.amount || 0), 0) || 0;
+  const remainingForSubBudgets = totalBudget - totalSubBudgets;
   const totalSpent = budgets?.reduce((acc, b) => acc + (b.spent || 0), 0) || 0;
   const totalRemaining = totalBudget - totalSpent;
   const usedPercent = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+
+  const handleCreateBudget = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const newAmount = parseFloat(formData.get("amount"));
+    
+    if (newAmount > remainingForSubBudgets) {
+      alert(`Cannot add budget. Maximum available: EGP ${remainingForSubBudgets.toLocaleString()}`);
+      return;
+    }
+    
+    createBudgetMutation.mutate(Object.fromEntries(formData));
+  };
 
   if (tripLoading || budgetsLoading)
     return (
@@ -249,7 +264,7 @@ export default function TripBudget() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-4 gap-3 mb-6">
         <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
           <div className="flex items-center gap-2 mb-1 text-indigo-600">
             <Wallet className="w-4 h-4" />
@@ -259,6 +274,18 @@ export default function TripBudget() {
           </div>
           <p className="text-lg font-bold text-indigo-900">
             EGP {totalBudget.toLocaleString()}
+          </p>
+        </div>
+
+        <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+          <div className="flex items-center gap-2 mb-1 text-blue-600">
+            <Wallet className="w-4 h-4" />
+            <span className="text-xs font-bold uppercase tracking-wider">
+              Allocated
+            </span>
+          </div>
+          <p className="text-lg font-bold text-blue-900">
+            EGP {totalSubBudgets.toLocaleString()}
           </p>
         </div>
 
@@ -275,20 +302,20 @@ export default function TripBudget() {
         </div>
 
         <div
-          className={`${totalRemaining < 0 ? "bg-red-50 border-red-100" : "bg-emerald-50 border-emerald-100"} p-4 rounded-2xl border`}
+          className={`${remainingForSubBudgets < 0 ? "bg-red-50 border-red-100" : "bg-emerald-50 border-emerald-100"} p-4 rounded-2xl border`}
         >
           <div
-            className={`flex items-center gap-2 mb-1 ${totalRemaining < 0 ? "text-red-600" : "text-emerald-600"}`}
+            className={`flex items-center gap-2 mb-1 ${remainingForSubBudgets < 0 ? "text-red-600" : "text-emerald-600"}`}
           >
             <Wallet className="w-4 h-4" />
             <span className="text-xs font-bold uppercase tracking-wider">
-              Remaining
+              Available
             </span>
           </div>
           <p
-            className={`text-lg font-bold ${totalRemaining < 0 ? "text-red-900" : "text-emerald-900"}`}
+            className={`text-lg font-bold ${remainingForSubBudgets < 0 ? "text-red-900" : "text-emerald-900"}`}
           >
-            EGP {totalRemaining.toLocaleString()}
+            EGP {remainingForSubBudgets.toLocaleString()}
           </p>
         </div>
       </div>
