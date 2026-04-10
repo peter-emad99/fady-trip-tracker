@@ -300,22 +300,22 @@ export default function TripBudget() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                   Budget Name
                 </th>
-                <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                   Allocated
                 </th>
-                <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                   Used
                 </th>
-                <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                   Remaining
                 </th>
-                <th className="text-center px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                <th className="text-center px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                   Progress
                 </th>
-                <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                   Actions
                 </th>
               </tr>
@@ -341,18 +341,18 @@ export default function TripBudget() {
                   return (
                     <tr key={budget.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
-                        <span className="font-medium text-gray-900">
+                        <span className="font-medium text-gray-900 whitespace-nowrap">
                           {budget.name}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right text-gray-600">
+                      <td className="px-6 py-4 text-right text-gray-600 whitespace-nowrap">
                         EGP {budget.amount?.toLocaleString()}
                       </td>
-                      <td className="px-6 py-4 text-right text-amber-600">
+                      <td className="px-6 py-4 text-right text-amber-600 whitespace-nowrap">
                         EGP {budget.spent?.toLocaleString()}
                       </td>
                       <td
-                        className={`px-6 py-4 text-right font-medium ${isOverBudget ? "text-red-600" : "text-emerald-600"}`}
+                        className={`px-6 py-4 text-right font-medium whitespace-nowrap ${isOverBudget ? "text-red-600" : "text-emerald-600"}`}
                       >
                         EGP {budget.remaining?.toLocaleString()}
                       </td>
@@ -369,12 +369,12 @@ export default function TripBudget() {
                                   : "bg-indigo-500"
                             }
                           />
-                          <span className="text-xs text-gray-400 w-10">
+                          <span className="text-xs text-gray-400 whitespace-nowrap">
                             {percent.toFixed(0)}%
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-6 py-4 text-right whitespace-nowrap">
                         <div className="flex justify-end gap-2">
                           <button
                             onClick={() => {
