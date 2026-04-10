@@ -262,7 +262,7 @@ export default function TripBudget() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
           <div className="flex items-center gap-2 mb-1 text-indigo-600">
             <Wallet className="w-4 h-4" />
@@ -319,128 +319,90 @@ export default function TripBudget() {
       </div>
 
       {/* Budgets List */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  Budget Name
-                </th>
-                <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  Allocated
-                </th>
-                <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  Used
-                </th>
-                <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  Remaining
-                </th>
-                <th className="text-center px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  Progress
-                </th>
-                <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {budgets?.budgets?.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-6 py-8 text-center text-gray-400"
-                  >
-                    No budgets yet. Click "Add Budget" to create one.
-                  </td>
-                </tr>
-              ) : (
-                budgets?.budgets?.map((budget) => {
-                  const percent =
-                    budget.amount > 0
-                      ? (budget.spent / budget.amount) * 100
-                      : 0;
-                  const isOverBudget = budget.spent > budget.amount;
+      <div className="space-y-3">
+        {budgets?.budgets?.length === 0 ? (
+          <div className="text-center py-8 text-gray-400">
+            No budgets yet. Click "Add Budget" to create one.
+          </div>
+        ) : (
+          budgets?.budgets?.map((budget) => {
+            const percent =
+              budget.amount > 0
+                ? (budget.spent / budget.amount) * 100
+                : 0;
+            const isOverBudget = budget.spent > budget.amount;
 
-                  return (
-                    <tr key={budget.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4">
-                        <span className="font-medium text-gray-900 whitespace-nowrap">
-                          {budget.name}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right text-gray-600 whitespace-nowrap">
-                        EGP {budget.amount?.toLocaleString()}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        {budget.spent > 0 ? (
-                          <button
-                            onClick={() => setSelectedBudget(budget)}
-                            className="text-amber-600 hover:text-amber-800 font-medium cursor-pointer"
-                          >
-                            EGP {budget.spent?.toLocaleString()}
-                          </button>
-                        ) : (
-                          <span className="text-gray-400">EGP 0</span>
-                        )}
-                      </td>
-                      <td
-                        className={`px-6 py-4 text-right font-medium whitespace-nowrap ${isOverBudget ? "text-red-600" : "text-emerald-600"}`}
+            return (
+              <div
+                key={budget.id}
+                className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm"
+              >
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h3 className="font-medium text-gray-900">{budget.name}</h3>
+                    <p className="text-sm text-gray-500">
+                      Allocated: EGP {budget.amount?.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingBudget(budget);
+                        setIsEditOpen(true);
+                      }}
+                      className="p-1 text-gray-400 hover:text-indigo-600"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirm("Are you sure you want to delete this budget?")) {
+                          deleteBudgetMutation.mutate(budget.id);
+                        }
+                      }}
+                      className="p-1 text-gray-400 hover:text-red-600"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center mb-2">
+                  <div className="text-sm">
+                    {budget.spent > 0 ? (
+                      <button
+                        onClick={() => setSelectedBudget(budget)}
+                        className="text-amber-600 hover:text-amber-800 font-medium"
                       >
-                        EGP {budget.remaining?.toLocaleString()}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <Progress
-                            value={Math.min(percent, 100)}
-                            className="flex-1 h-2"
-                            indicatorClassName={
-                              isOverBudget
-                                ? "bg-red-500"
-                                : percent > 80
-                                  ? "bg-amber-500"
-                                  : "bg-indigo-500"
-                            }
-                          />
-                          <span className="text-xs text-gray-400 whitespace-nowrap">
-                            {percent.toFixed(0)}%
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            onClick={() => {
-                              setEditingBudget(budget);
-                              setIsEditOpen(true);
-                            }}
-                            className="p-1 text-gray-400 hover:text-indigo-600"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  "Are you sure you want to delete this budget?"
-                                )
-                              ) {
-                                deleteBudgetMutation.mutate(budget.id);
-                              }
-                            }}
-                            className="p-1 text-gray-400 hover:text-red-600"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                        Used: EGP {budget.spent?.toLocaleString()}
+                      </button>
+                    ) : (
+                      <span className="text-gray-400">Used: EGP 0</span>
+                    )}
+                  </div>
+                  <div className={`text-sm font-medium ${isOverBudget ? "text-red-600" : "text-emerald-600"}`}>
+                    Remaining: EGP {budget.remaining?.toLocaleString()}
+                  </div>
+                </div>
+
+                <Progress
+                  value={Math.min(percent, 100)}
+                  className="h-2"
+                  indicatorClassName={
+                    isOverBudget
+                      ? "bg-red-500"
+                      : percent > 80
+                        ? "bg-amber-500"
+                        : "bg-indigo-500"
+                  }
+                />
+                <div className="text-xs text-gray-400 mt-1 text-right">
+                  {percent.toFixed(0)}%
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Edit Budget Dialog */}
