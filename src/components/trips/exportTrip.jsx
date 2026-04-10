@@ -145,10 +145,10 @@ export const exportTripToPDF = async (trip, expenses) => {
   });
 
   if (expensesWithReceipts.length > 0) {
-    doc.addPage();
-    yPos = margin;
-
     for (const expense of expensesWithReceipts) {
+      doc.addPage();
+      yPos = margin;
+
       // Header
       doc.setFontSize(22);
       doc.setTextColor(0, 0, 0);
