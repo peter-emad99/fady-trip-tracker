@@ -138,55 +138,61 @@ export const exportTripToPDF = async (trip, expenses) => {
     yPos += 8;
   }
 
-  // Detailed Pages Section (One expense per page)
-  for (const expense of sortedExpenses) {
+  // Detailed Pages Section - Only for expenses with receipts
+  const expensesWithReceipts = sortedExpenses.filter(expense => {
+    const urls = expense.receipt_urls?.length > 0 ? expense.receipt_urls : (expense.receipt_url ? [expense.receipt_url] : []);
+    return urls.length > 0;
+  });
+
+  if (expensesWithReceipts.length > 0) {
     doc.addPage();
     yPos = margin;
 
-    // Header
-    doc.setFontSize(22);
-    doc.setTextColor(0, 0, 0);
-    doc.text(expense.category || 'Other', margin, yPos);
-    
-    doc.setFontSize(18);
-    doc.text(`EGP ${expense.cost?.toFixed(2)}`, pageWidth - margin, yPos, { align: 'right' });
-    yPos += 15;
-
-    // Metadata
-    doc.setFontSize(11);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Date: ${new Date(expense.date).toLocaleDateString()}`, margin, yPos);
-    
-    if (expense.assigned_to) {
-        doc.text(`Assigned to: ${expense.assigned_to}`, pageWidth - margin, yPos, { align: 'right' });
-    }
-    yPos += 10;
-
-    // Notes
-    if (expense.notes) {
-      doc.setFontSize(12);
-      doc.setTextColor(50, 50, 50);
-      const splitNotes = doc.splitTextToSize(`Notes: ${expense.notes}`, pageWidth - (margin * 2));
-      doc.text(splitNotes, margin, yPos);
-      yPos += (splitNotes.length * 7) + 15;
-    } else {
-      yPos += 10;
-    }
-
-    // Receipts for this specific expense
-    const urls = expense.receipt_urls?.length > 0 ? expense.receipt_urls : (expense.receipt_url ? [expense.receipt_url] : []);
-    
-    if (urls.length > 0) {
-      doc.setDrawColor(220, 220, 220);
-      doc.line(margin, yPos, pageWidth - margin, yPos);
-      yPos += 12;
-
-      doc.setFontSize(14);
+    for (const expense of expensesWithReceipts) {
+      // Header
+      doc.setFontSize(22);
       doc.setTextColor(0, 0, 0);
-      doc.text('Receipts:', margin, yPos);
+      doc.text(expense.category || 'Other', margin, yPos);
+      
+      doc.setFontSize(18);
+      doc.text(`EGP ${expense.cost?.toFixed(2)}`, pageWidth - margin, yPos, { align: 'right' });
+      yPos += 15;
+
+      // Metadata
+      doc.setFontSize(11);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Date: ${new Date(expense.date).toLocaleDateString()}`, margin, yPos);
+      
+      if (expense.assigned_to) {
+          doc.text(`Assigned to: ${expense.assigned_to}`, pageWidth - margin, yPos, { align: 'right' });
+      }
       yPos += 10;
 
-      for (let i = 0; i < urls.length; i++) {
+      // Notes
+      if (expense.notes) {
+        doc.setFontSize(12);
+        doc.setTextColor(50, 50, 50);
+        const splitNotes = doc.splitTextToSize(`Notes: ${expense.notes}`, pageWidth - (margin * 2));
+        doc.text(splitNotes, margin, yPos);
+        yPos += (splitNotes.length * 7) + 15;
+      } else {
+        yPos += 10;
+      }
+
+      // Receipts for this specific expense
+      const urls = expense.receipt_urls?.length > 0 ? expense.receipt_urls : (expense.receipt_url ? [expense.receipt_url] : []);
+      
+      if (urls.length > 0) {
+        doc.setDrawColor(220, 220, 220);
+        doc.line(margin, yPos, pageWidth - margin, yPos);
+        yPos += 12;
+
+        doc.setFontSize(14);
+        doc.setTextColor(0, 0, 0);
+        doc.text('Receipts:', margin, yPos);
+        yPos += 10;
+
+        for (let i = 0; i < urls.length; i++) {
         const url = urls[i];
         
         try {
