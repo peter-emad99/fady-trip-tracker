@@ -62,30 +62,36 @@ export default function TripBudget() {
 
       if (budgetsError) throw budgetsError;
 
-      // Get expenses grouped by trip_budget_id
-      const { data: expenses, error: expensesError } = await supabase
+      // Get all expenses for this trip (for total spent)
+      const { data: allExpenses, error: allExpensesError } = await supabase
         .from("expenses")
         .select("trip_budget_id, cost")
-        .eq("trip_id", id)
-        .not("trip_budget_id", "is", null);
+        .eq("trip_id", id);
 
-      if (expensesError) throw expensesError;
+      if (allExpensesError) throw allExpensesError;
 
-      // Calculate spent per budget
+      // Calculate total spent from all expenses
+      const totalSpent = allExpenses.reduce((acc, exp) => acc + (exp.cost || 0), 0);
+
+      // Get expenses with trip_budget_id for per-budget calculation
+      const expensesWithBudget = allExpenses.filter(exp => exp.trip_budget_id);
       const spentByBudget = {};
-      expenses.forEach((exp) => {
+      expensesWithBudget.forEach((exp) => {
         if (exp.trip_budget_id) {
           spentByBudget[exp.trip_budget_id] =
             (spentByBudget[exp.trip_budget_id] || 0) + (exp.cost || 0);
         }
       });
 
-      // Merge spent amount into budgets
-      return budgetsData.map((budget) => ({
-        ...budget,
-        spent: spentByBudget[budget.id] || 0,
-        remaining: budget.amount - (spentByBudget[budget.id] || 0),
-      }));
+      // Merge spent amount into budgets and add totalSpent
+      return {
+        budgets: budgetsData.map((budget) => ({
+          ...budget,
+          spent: spentByBudget[budget.id] || 0,
+          remaining: budget.amount - (spentByBudget[budget.id] || 0),
+        })),
+        totalSpent,
+      };
     },
     enabled: !!id,
   });
@@ -167,12 +173,9 @@ export default function TripBudget() {
 
   // Calculations
   const totalBudget = trip?.received_amount || 0;
-  const totalSubBudgets = budgets?.reduce((acc, b) => acc + (b.amount || 0), 0) || 0;
+  const totalSubBudgets = budgets?.budgets?.reduce((acc, b) => acc + (b.amount || 0), 0) || 0;
   const remainingForSubBudgets = totalBudget - totalSubBudgets;
-  const totalSpent = budgets?.reduce((acc, b) => acc + (b.spent || 0), 0) || 0;
-  const totalRemaining = totalBudget - totalSpent;
-  const usedPercent = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
-  const progressValue = totalSpent > 0 ? Math.max(usedPercent, 2) : 0;
+  const totalSpent = budgets?.totalSpent || 0;
 
   const handleCreateBudget = (e) => {
     e.preventDefault();
@@ -315,25 +318,6 @@ export default function TripBudget() {
         </div>
       </div>
 
-      {/* Progress Bar */}
-      <div className="mb-8">
-        <div className="flex justify-between text-xs mb-2 text-slate-500">
-          <span>Total Budget Used</span>
-          <span>{Math.max(usedPercent, 2).toFixed(0)}%</span>
-        </div>
-        <Progress
-          value={progressValue}
-          className="h-3"
-          indicatorClassName={
-            usedPercent > 100
-              ? "bg-red-500"
-              : usedPercent > 80
-                ? "bg-amber-500"
-                : "bg-indigo-500"
-          }
-        />
-      </div>
-
       {/* Budgets List */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -361,7 +345,7 @@ export default function TripBudget() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {budgets?.length === 0 ? (
+              {budgets?.budgets?.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
@@ -371,7 +355,7 @@ export default function TripBudget() {
                   </td>
                 </tr>
               ) : (
-                budgets?.map((budget) => {
+                budgets?.budgets?.map((budget) => {
                   const percent =
                     budget.amount > 0
                       ? (budget.spent / budget.amount) * 100
