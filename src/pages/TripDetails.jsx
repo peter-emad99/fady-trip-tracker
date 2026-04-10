@@ -220,11 +220,84 @@ export default function TripDetails() {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Pencil className="w-4 h-4" /> Edit
-              </Button>
-            </DialogTrigger>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Pencil className="w-4 h-4" /> Edit
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Edit Trip Details</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleUpdateTrip} className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Trip Name</Label>
+                    <Input
+                      id="name"
+                      name="name"
+                      defaultValue={trip.name}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="amount">Total Budget</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-medium">
+                        EGP
+                      </span>
+                      <Input
+                        id="amount"
+                        name="received_amount"
+                        type="number"
+                        step="0.01"
+                        className="pl-12"
+                        defaultValue={trip.received_amount}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="start">Start Date</Label>
+                      <Input
+                        id="start"
+                        name="start_date"
+                        type="date"
+                        defaultValue={trip.start_date}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="end">End Date</Label>
+                      <Input
+                        id="end"
+                        name="end_date"
+                        type="date"
+                        defaultValue={trip.end_date}
+                      />
+                    </div>
+                  </div>
+                  <div className="pt-4 flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsEditOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      className="bg-indigo-600"
+                      disabled={updateTripMutation.isPending}
+                    >
+                      {updateTripMutation.isPending
+                        ? "Saving..."
+                        : "Save Changes"}
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
             <Button
               variant="outline"
               size="sm"
@@ -244,7 +317,11 @@ export default function TripDetails() {
               size="sm"
               className="gap-2 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
               onClick={() => {
-                if (confirm(`Are you sure you want to delete "${trip.name}"? This will also delete all expenses.`)) {
+                if (
+                  confirm(
+                    `Are you sure you want to delete "${trip.name}"? This will also delete all expenses.`,
+                  )
+                ) {
                   deleteTripMutation.mutate();
                 }
               }}
@@ -252,79 +329,7 @@ export default function TripDetails() {
               <Trash2 className="w-4 h-4" />
               Delete
             </Button>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Edit Trip Details</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleUpdateTrip} className="space-y-4 mt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Trip Name</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    defaultValue={trip.name}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="amount">Total Budget</Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-medium">
-                      EGP
-                    </span>
-                    <Input
-                      id="amount"
-                      name="received_amount"
-                      type="number"
-                      step="0.01"
-                      className="pl-12"
-                      defaultValue={trip.received_amount}
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="start">Start Date</Label>
-                    <Input
-                      id="start"
-                      name="start_date"
-                      type="date"
-                      defaultValue={trip.start_date}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="end">End Date</Label>
-                    <Input
-                      id="end"
-                      name="end_date"
-                      type="date"
-                      defaultValue={trip.end_date}
-                    />
-                  </div>
-                </div>
-                <div className="pt-4 flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsEditOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="bg-indigo-600"
-                    disabled={updateTripMutation.isPending}
-                  >
-                    {updateTripMutation.isPending
-                      ? "Saving..."
-                      : "Save Changes"}
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+          </div>
         </div>
       </div>
 
