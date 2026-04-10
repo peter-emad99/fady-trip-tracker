@@ -149,24 +149,34 @@ export const exportTripToPDF = async (trip, expenses) => {
       doc.addPage();
       yPos = margin;
 
-      // Header
-      doc.setFontSize(22);
-      doc.setTextColor(0, 0, 0);
-      doc.text(expense.category || 'Other', margin, yPos);
+      // Header Card
+      const cardHeight = 35;
+      doc.setDrawColor(226, 232, 240);
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(margin, yPos, pageWidth - (margin * 2), cardHeight, 3, 3, 'FD');
       
-      doc.setFontSize(18);
-      doc.text(`EGP ${expense.cost?.toFixed(2)}`, pageWidth - margin, yPos, { align: 'right' });
-      yPos += 15;
+      const innerY = yPos + 12;
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 41, 59);
+      doc.text(expense.category || 'Other', margin + 5, innerY);
+      
+      doc.setFontSize(14);
+      doc.setTextColor(239, 68, 68);
+      doc.text(`EGP ${expense.cost?.toFixed(2)}`, pageWidth - margin - 5, innerY, { align: 'right' });
+      
+      yPos += cardHeight + 5;
 
       // Metadata
-      doc.setFontSize(11);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
       doc.setTextColor(100, 100, 100);
       doc.text(`Date: ${new Date(expense.date).toLocaleDateString()}`, margin, yPos);
       
       if (expense.assigned_to) {
           doc.text(`Assigned to: ${expense.assigned_to}`, pageWidth - margin, yPos, { align: 'right' });
       }
-      yPos += 10;
+      yPos += 12;
 
       // Notes
       if (expense.notes) {
