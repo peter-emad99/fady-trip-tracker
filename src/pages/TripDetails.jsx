@@ -218,7 +218,9 @@ export default function TripDetails() {
               </span>
             </div>
           </div>
-          <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+          </div>
+          <div className="flex items-center gap-2">
+            <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
                 <Pencil className="w-4 h-4" /> Edit
@@ -227,7 +229,7 @@ export default function TripDetails() {
             <Button
               variant="outline"
               size="sm"
-              className="gap-2 ml-2"
+              className="gap-2"
               onClick={handleExport}
               disabled={isExporting}
             >
@@ -241,7 +243,7 @@ export default function TripDetails() {
             <Button
               variant="outline"
               size="sm"
-              className="gap-2 ml-2 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+              className="gap-2 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
               onClick={() => {
                 if (confirm(`Are you sure you want to delete "${trip.name}"? This will also delete all expenses.`)) {
                   deleteTripMutation.mutate();
