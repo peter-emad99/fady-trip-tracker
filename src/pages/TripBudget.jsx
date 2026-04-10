@@ -159,12 +159,6 @@ export default function TripBudget() {
     },
   });
 
-  const handleCreateBudget = (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    createBudgetMutation.mutate(Object.fromEntries(formData));
-  };
-
   const handleUpdateBudget = (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
