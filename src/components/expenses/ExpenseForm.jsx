@@ -248,7 +248,6 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
               />
             </div>
           </div>
-          </div>
 
           {/* Notes */}
           <div className="space-y-2">
