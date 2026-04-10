@@ -172,6 +172,7 @@ export default function TripBudget() {
   const totalSpent = budgets?.reduce((acc, b) => acc + (b.spent || 0), 0) || 0;
   const totalRemaining = totalBudget - totalSpent;
   const usedPercent = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+  const progressValue = totalSpent > 0 ? Math.max(usedPercent, 2) : 0;
 
   const handleCreateBudget = (e) => {
     e.preventDefault();
@@ -321,7 +322,7 @@ export default function TripBudget() {
           <span>{usedPercent.toFixed(0)}%</span>
         </div>
         <Progress
-          value={usedPercent}
+          value={progressValue}
           className="h-3"
           indicatorClassName={
             usedPercent > 100
