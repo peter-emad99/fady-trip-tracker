@@ -15,6 +15,7 @@ import {
   List as ListIcon,
   Pencil,
   Download,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -146,6 +147,17 @@ export default function TripDetails() {
     },
   });
 
+  const deleteTripMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("trips").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trips"] });
+      window.location.href = "/";
+    },
+  });
+
   const handleUpdateTrip = (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -225,6 +237,19 @@ export default function TripDetails() {
                 <Download className="w-4 h-4" />
               )}
               Export
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 ml-2 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+              onClick={() => {
+                if (confirm(`Are you sure you want to delete "${trip.name}"? This will also delete all expenses.`)) {
+                  deleteTripMutation.mutate();
+                }
+              }}
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete
             </Button>
             <DialogContent>
               <DialogHeader>
