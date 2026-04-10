@@ -319,7 +319,7 @@ export default function TripBudget() {
       <div className="mb-8">
         <div className="flex justify-between text-xs mb-2 text-slate-500">
           <span>Total Budget Used</span>
-          <span>{usedPercent.toFixed(0)}%</span>
+          <span>{Math.max(usedPercent, 2).toFixed(0)}%</span>
         </div>
         <Progress
           value={progressValue}
