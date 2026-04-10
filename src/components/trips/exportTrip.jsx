@@ -203,38 +203,39 @@ export const exportTripToPDF = async (trip, expenses) => {
         yPos += 10;
 
         for (let i = 0; i < urls.length; i++) {
-        const url = urls[i];
-        
-        try {
-          const imgData = await getImageData(url);
-          const props = doc.getImageProperties(imgData);
-          const maxWidth = pageWidth - (margin * 2);
-          const maxHeight = 160; 
+          const url = urls[i];
           
-          let w = props.width;
-          let h = props.height;
-          
-          if (w > maxWidth) {
-            h = (h * maxWidth) / w;
-            w = maxWidth;
-          }
-          if (h > maxHeight) {
-            w = (w * maxHeight) / h;
-            h = maxHeight;
-          }
+          try {
+            const imgData = await getImageData(url);
+            const props = doc.getImageProperties(imgData);
+            const maxWidth = pageWidth - (margin * 2);
+            const maxHeight = 160; 
+            
+            let w = props.width;
+            let h = props.height;
+            
+            if (w > maxWidth) {
+              h = (h * maxWidth) / w;
+              w = maxWidth;
+            }
+            if (h > maxHeight) {
+              w = (w * maxHeight) / h;
+              h = maxHeight;
+            }
 
-          if (yPos + h > pageHeight - margin) {
-            doc.addPage();
-            yPos = margin;
-          }
+            if (yPos + h > pageHeight - margin) {
+              doc.addPage();
+              yPos = margin;
+            }
 
-          doc.addImage(imgData, 'JPEG', margin, yPos, w, h);
-          yPos += h + 15;
-        } catch (e) {
-          doc.setFontSize(9);
-          doc.setTextColor(200, 50, 50);
-          doc.text(`[Error loading receipt ${i + 1}]`, margin, yPos);
-          yPos += 10;
+            doc.addImage(imgData, 'JPEG', margin, yPos, w, h);
+            yPos += h + 15;
+          } catch (e) {
+            doc.setFontSize(9);
+            doc.setTextColor(200, 50, 50);
+            doc.text(`[Error loading receipt ${i + 1}]`, margin, yPos);
+            yPos += 10;
+          }
         }
       }
     }
