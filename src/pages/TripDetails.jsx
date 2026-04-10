@@ -204,7 +204,7 @@ export default function TripDetails() {
           <ArrowLeft className="w-4 h-4 mr-1" /> Back to Trips
         </Link>
 
-        <div className="flex justify-between items-start">
+        <div className="flex flex-wrap justify-between items-start gap-4">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">{trip.name}</h1>
             <div className="flex items-center gap-2 text-slate-500 mt-1">
@@ -217,7 +217,6 @@ export default function TripDetails() {
                   ` - ${format(new Date(trip.end_date), "MMM d, yyyy")}`}
               </span>
             </div>
-          </div>
           </div>
           <div className="flex items-center gap-2">
             <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
