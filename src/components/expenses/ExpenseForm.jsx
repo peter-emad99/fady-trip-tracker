@@ -111,9 +111,9 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       const cleanData = {
           ...data,
           cost: parseFloat(data.cost),
-          // Ensure backward compatibility or cleanup
           receipt_url: data.receipt_urls?.[0] || null,
-          user_id: user.id
+          user_id: user.id,
+          trip_budget_id: data.trip_budget_id || null
       };
 
       if (expenseToEdit) {
