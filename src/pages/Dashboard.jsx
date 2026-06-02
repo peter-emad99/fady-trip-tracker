@@ -22,8 +22,7 @@ export default function Dashboard() {
       const { data, error } = await supabase
         .from('trips')
         .select('*')
-        .order('start_date', { ascending: false })
-        .order('created_at', { ascending: false });
+        .order('start_date', { ascending: false });
       if (error) throw error;
       return data;
     },
