@@ -336,7 +336,7 @@ export default function TripDetails() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
+      <div className="grid grid-cols-3 gap-3 mb-8">
         <Link
           to={`/TripBudget?id=${id}`}
           className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 hover:bg-indigo-100 transition-colors cursor-pointer"
