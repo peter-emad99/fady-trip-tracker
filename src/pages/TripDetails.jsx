@@ -204,21 +204,23 @@ export default function TripDetails() {
           <ArrowLeft className="w-4 h-4 mr-1" /> Back to Trips
         </Link>
 
-        <div className="flex justify-between items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900">{trip.name}</h1>
-            <div className="flex items-center gap-2 text-slate-500 mt-1">
-              <Calendar className="w-4 h-4" />
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 break-words">
+              {trip.name}
+            </h1>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-slate-500 mt-1">
+              <Calendar className="w-4 h-4 shrink-0" />
               <span className="text-sm">
                 {trip.start_date
-                  ? format(new Date(trip.start_date), "MMM d")
+                  ? format(new Date(trip.start_date), "MMM d, yyyy")
                   : "TBD"}
                 {trip.end_date &&
                   ` - ${format(new Date(trip.end_date), "MMM d, yyyy")}`}
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-2">
@@ -334,7 +336,7 @@ export default function TripDetails() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-3 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
         <Link
           to={`/TripBudget?id=${id}`}
           className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 hover:bg-indigo-100 transition-colors cursor-pointer"
