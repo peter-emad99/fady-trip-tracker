@@ -1,5 +1,5 @@
 -- Categories: close the "allow all" hole and lock categories that expenses already use.
--- NOT APPLIED YET. Run it in the Supabase SQL editor (or `supabase db push`) when ready.
+-- Applied 2026-10-08 (run in the Supabase SQL editor).
 
 -- This policy let anyone (even signed-out visitors with the public key) change or delete any category.
 drop policy if exists "Allow all for categories" on public.categories;
