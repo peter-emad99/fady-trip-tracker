@@ -105,6 +105,15 @@ function handleTable(table, url, method, headers, body) {
   }
 
   const wantsRows = (headers.get('prefer') || '').includes('return=representation');
+
+  // Same rule as the database trigger (supabase/migrations/20261012000000_lock_categories.sql):
+  // a category used by expenses can't be renamed or deleted
+  if (table === 'categories' && (method === 'DELETE' || (method === 'PATCH' && body && 'name' in body))) {
+    const used = rows.filter(matches).find((c) => db.expenses.some((e) => e.category === c.name));
+    if (used) {
+      return json({ code: 'P0001', message: `Category "${used.name}" is used by expenses, so it can't be renamed or deleted` }, 400);
+    }
+  }
   if (method === 'POST') {
     const upsert = (headers.get('prefer') || '').includes('merge-duplicates');
     const added = [];
@@ -123,7 +132,6 @@ function handleTable(table, url, method, headers, body) {
   if (method === 'PATCH') {
     const changed = rows.filter(matches);
     changed.forEach((r) => Object.assign(r, body));
-    // Mirror the real database: renaming a category is done by the app; nothing to cascade here
     saveDb();
     return wantsRows ? json(changed) : empty();
   }

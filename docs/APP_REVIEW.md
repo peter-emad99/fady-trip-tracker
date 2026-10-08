@@ -145,6 +145,15 @@ Every screen was checked at 375px and 320px wide (no sideways scrolling), in lig
   - A badge switches the app offline/online and resets the data.
   - See the README.
 
+## 🔒 Category lock
+
+- [x] **Categories used by expenses can't be renamed or deleted.** Categories show a 🔒 with "N expenses", and only their colour can change. Anyone signed in can still add categories, and unused ones can still be renamed or deleted. (In the app and in mock mode.)
+- [ ] **Database side (not applied; you declined running it).** `supabase/migrations/20261012000000_lock_categories.sql`:
+  - Removes the "Allow all for categories" rule. That rule lets anyone, even signed-out visitors, change or delete any category.
+  - Lets admins recolour shared categories.
+  - Adds a trigger that enforces the lock in the database too.
+  - Until it's applied, the lock is only in the app, and the open rule remains.
+
 ## 💡 Feature ideas (waiting for your go-ahead)
 
 - [ ] **Split and settle-up (who owes whom):** a list of travelers per trip, "paid by" and "split between" on each expense, and a settle-up summary. It builds on the existing `assigned_to` field.

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
-import { Plus, Pencil, Trash2, X, Check, Settings2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Check, Settings2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -34,6 +34,20 @@ export default function CategoryManager({ open, onOpenChange }) {
         .order('name');
       if (error) throw error;
       return data;
+    },
+  });
+
+  // How many of your expenses use each category. A category in use can't be renamed or deleted,
+  // because expenses store the category by name and would lose it (its colour can still change).
+  const { data: usage = {} } = useQuery({
+    queryKey: ['expenses', 'categoryUsage'],
+    enabled: isOpen,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('expenses').select('category');
+      if (error) throw error;
+      const counts = {};
+      for (const { category } of data) counts[category] = (counts[category] || 0) + 1;
+      return counts;
     },
   });
 
@@ -76,22 +90,12 @@ export default function CategoryManager({ open, onOpenChange }) {
   const canEdit = (cat) => (cat.user_id ? cat.user_id === user?.id : isAdmin === true);
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, oldName, newName }) => {
+    mutationFn: async ({ id, newName }) => {
       const { error } = await supabase
         .from('categories')
         .update({ name: newName })
         .eq('id', id);
       if (error) throw error;
-
-      // Expenses store the category by name, so move the user's expenses over to the new name
-      if (oldName !== newName) {
-        const { error: expensesError } = await supabase
-          .from('expenses')
-          .update({ category: newName })
-          .eq('category', oldName)
-          .eq('user_id', user.id);
-        if (expensesError) throw expensesError;
-      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
@@ -139,7 +143,9 @@ export default function CategoryManager({ open, onOpenChange }) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Manage Categories</DialogTitle>
-          <p className="text-sm text-slate-500">Tap a colour dot to choose that category's colour.</p>
+          <p className="text-sm text-slate-500">
+            Tap a colour dot to choose a colour. Categories already used by expenses can't be renamed or deleted.
+          </p>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="flex gap-2 mt-4">
@@ -172,7 +178,7 @@ export default function CategoryManager({ open, onOpenChange }) {
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && name.trim()) {
                           e.preventDefault();
-                          updateMutation.mutate({ id: cat.id, oldName: cat.name, newName: name.trim() });
+                          updateMutation.mutate({ id: cat.id, newName: name.trim() });
                         }
                       }}
                     />
@@ -182,7 +188,7 @@ export default function CategoryManager({ open, onOpenChange }) {
                       aria-label="Save name"
                       className="shrink-0 text-green-600"
                       disabled={!name.trim() || updateMutation.isPending}
-                      onClick={() => updateMutation.mutate({ id: cat.id, oldName: cat.name, newName: name.trim() })}
+                      onClick={() => updateMutation.mutate({ id: cat.id, newName: name.trim() })}
                     >
                       <Check className="w-4 h-4" />
                     </Button>
@@ -217,7 +223,7 @@ export default function CategoryManager({ open, onOpenChange }) {
                       )}
                     </div>
                     <div className="flex items-center gap-1">
-                      {cat.user_id === user?.id ? (
+                      {cat.user_id === user?.id && !usage[cat.name] ? (
                         <>
                           <Button 
                             size="icon" 
@@ -246,7 +252,20 @@ export default function CategoryManager({ open, onOpenChange }) {
                           </Button>
                         </>
                       ) : (
-                        <span className="text-[10px] text-slate-400 italic mr-2">{cat.user_id ? 'Not yours' : 'Locked'}</span>
+                        <span
+                          className="mr-2 inline-flex items-center gap-1 text-[11px] text-slate-400"
+                          title={usage[cat.name] ? 'In use, so it can\'t be renamed or deleted' : undefined}
+                        >
+                          {usage[cat.name] ? (
+                            <>
+                              <Lock className="h-3 w-3" /> {usage[cat.name]} {usage[cat.name] === 1 ? 'expense' : 'expenses'}
+                            </>
+                          ) : cat.user_id ? (
+                            'Not yours'
+                          ) : (
+                            'Shared'
+                          )}
+                        </span>
                       )}
                     </div>
                   </>
