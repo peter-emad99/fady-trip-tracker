@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { deleteReceipt, organizeReceipts } from "@/api/receiptStorage";
@@ -31,6 +31,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "@/components/ui/use-toast";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 import ExpenseForm from "../components/expenses/ExpenseForm";
 import ExpenseList from "../components/expenses/ExpenseList";
@@ -45,7 +47,9 @@ export default function TripDetails() {
   const [editingExpense, setEditingExpense] = useState(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [confirm, setConfirm] = useState(null);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   // Fetch Trip
   const { data: trip, isLoading: tripLoading } = useQuery({
@@ -90,38 +94,26 @@ export default function TripDetails() {
   });
 
   const deleteExpenseMutation = useMutation({
-    mutationFn: async (expenseId) => {
-      // First, get the expense to retrieve receipt URLs
-      const { data: expense } = await supabase
-        .from("expenses")
-        .select("receipt_urls, receipt_url")
-        .eq("id", expenseId)
-        .single();
-
-      // Delete receipt files from storage
-      if (expense) {
-        const urlsToDelete =
-          expense.receipt_urls ||
-          (expense.receipt_url ? [expense.receipt_url] : []);
-
-        for (const url of urlsToDelete) {
-          try {
-            await deleteReceipt(url);
-          } catch (err) {
-            console.error("Failed to delete receipt file:", err);
-          }
-        }
-      }
-
-      // Then delete the expense record
+    mutationFn: async (expense) => {
+      // Delete the record first, so a failure never leaves an expense whose receipts are gone
       const { error } = await supabase
         .from("expenses")
         .delete()
-        .eq("id", expenseId);
+        .eq("id", expense.id);
       if (error) throw error;
+
+      await deleteReceiptFiles([expense]);
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["expenses", id] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      toast({ title: "Expense deleted" });
+    },
+    onError: (error) =>
+      toast({
+        variant: "destructive",
+        title: "Couldn't delete the expense",
+        description: error.message,
+      }),
   });
 
   const updateTripMutation = useMutation({
@@ -149,11 +141,22 @@ export default function TripDetails() {
     mutationFn: async () => {
       const { error } = await supabase.from("trips").delete().eq("id", id);
       if (error) throw error;
+
+      // Its expenses go with it (cascade), so clean up their receipts in Google Drive too
+      await deleteReceiptFiles(expenses || []);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trips"] });
-      window.location.href = "/";
+      queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      toast({ title: `"${trip.name}" deleted` });
+      navigate("/");
     },
+    onError: (error) =>
+      toast({
+        variant: "destructive",
+        title: "Couldn't delete the trip",
+        description: error.message,
+      }),
   });
 
   const handleUpdateTrip = (e) => {
@@ -178,7 +181,8 @@ export default function TripDetails() {
     if (!trip || !expenses) return { total: 0, remaining: 0, percent: 0 };
     const total = expenses.reduce((acc, curr) => acc + (curr.cost || 0), 0);
     const remaining = (trip.received_amount || 0) - total;
-    const percent = Math.min(100, (total / (trip.received_amount || 1)) * 100);
+    // Not capped, so going over budget shows (e.g. 130%) and turns the bar red
+    const percent = (total / (trip.received_amount || 1)) * 100;
     return { total, remaining, percent };
   }, [trip, expenses]);
 
@@ -316,15 +320,16 @@ export default function TripDetails() {
               variant="outline"
               size="sm"
               className="gap-2 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
-              onClick={() => {
-                if (
-                  confirm(
-                    `Are you sure you want to delete "${trip.name}"? This will also delete all expenses.`,
-                  )
-                ) {
-                  deleteTripMutation.mutate();
-                }
-              }}
+              disabled={deleteTripMutation.isPending}
+              onClick={() =>
+                setConfirm({
+                  title: `Delete "${trip.name}"?`,
+                  description:
+                    "This deletes the trip, all its expenses and their receipts. It can't be undone.",
+                  confirmLabel: "Delete trip",
+                  onConfirm: () => deleteTripMutation.mutate(),
+                })
+              }
             >
               <Trash2 className="w-4 h-4" />
               Delete
@@ -388,7 +393,7 @@ export default function TripDetails() {
           <span>{stats.percent.toFixed(0)}%</span>
         </div>
         <Progress
-          value={stats.percent}
+          value={Math.min(100, stats.percent)}
           className={`h-3 ${stats.percent > 100 ? "bg-red-100" : "bg-gray-100"}`}
           indicatorClassName={
             stats.percent > 100
@@ -414,7 +419,20 @@ export default function TripDetails() {
         <TabsContent value="list" className="pb-20">
           <ExpenseList
             expenses={expenses || []}
-            onDelete={(id) => deleteExpenseMutation.mutate(id)}
+            onDelete={(expenseId) => {
+              const expense = expenses?.find((e) => e.id === expenseId);
+              if (!expense) return;
+              setConfirm({
+                title: "Delete this expense?",
+                description: `EGP ${expense.cost?.toLocaleString()} · ${expense.category}${
+                  expense.date
+                    ? ` · ${format(new Date(expense.date), "MMM d")}`
+                    : ""
+                }. Its receipts will be deleted too. This can't be undone.`,
+                confirmLabel: "Delete expense",
+                onConfirm: () => deleteExpenseMutation.mutate(expense),
+              });
+            }}
             onEdit={(expense) => {
               setEditingExpense(expense);
               setShowExpenseForm(true);
@@ -449,31 +467,44 @@ export default function TripDetails() {
         <Plus className="w-6 h-6" />
       </motion.button>
 
-      {/* Add/Edit Expense Modal */}
+      <ConfirmDialog confirm={confirm} onClose={() => setConfirm(null)} />
+
+      {/* Add/Edit Expense Modal (it renders its own backdrop, so closing can ask about unsaved changes) */}
       <AnimatePresence>
         {showExpenseForm && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.5 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowExpenseForm(false)}
-              className="fixed inset-0 bg-black z-40"
-            />
-            <ExpenseForm
-              tripId={id}
-              categories={categories}
-              expenseToEdit={editingExpense}
-              onClose={() => setShowExpenseForm(false)}
-              onSuccess={() => {
-                queryClient.invalidateQueries({ queryKey: ["expenses", id] });
-                queryClient.invalidateQueries({ queryKey: ["trips"] });
-                setShowExpenseForm(false);
-              }}
-            />
-          </>
+          <ExpenseForm
+            key="expense-form"
+            tripId={id}
+            categories={categories}
+            expenseToEdit={editingExpense}
+            onClose={() => setShowExpenseForm(false)}
+            onSuccess={() => {
+              // Prefix match, so the Dashboard's all-expenses totals refresh too
+              queryClient.invalidateQueries({ queryKey: ["expenses"] });
+              queryClient.invalidateQueries({ queryKey: ["trips"] });
+              setShowExpenseForm(false);
+            }}
+          />
         )}
       </AnimatePresence>
     </div>
   );
+}
+
+// Best effort: the records are already gone, so a file that fails to delete is only logged
+async function deleteReceiptFiles(expenses) {
+  for (const expense of expenses) {
+    const urls = expense.receipt_urls?.length
+      ? expense.receipt_urls
+      : expense.receipt_url
+        ? [expense.receipt_url]
+        : [];
+    for (const url of urls) {
+      try {
+        await deleteReceipt(url);
+      } catch (err) {
+        console.error("Failed to delete receipt file:", err);
+      }
+    }
+  }
 }

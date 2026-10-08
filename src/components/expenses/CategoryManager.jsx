@@ -6,8 +6,9 @@ import { Plus, Pencil, Trash2, X, Check, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/use-toast';
+
+const showError = (title) => (error) => toast({ variant: 'destructive', title, description: error.message });
 
 export default function CategoryManager() {
   const { user } = useAuth();
@@ -40,24 +41,37 @@ export default function CategoryManager() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       setName('');
-      toast.success('Category created');
+      toast({ title: 'Category created' });
     },
-    onError: (error) => toast.error(error.message),
+    onError: showError("Couldn't create the category"),
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, newName }) => {
+    mutationFn: async ({ id, oldName, newName }) => {
       const { error } = await supabase
         .from('categories')
         .update({ name: newName })
         .eq('id', id);
       if (error) throw error;
+
+      // Expenses store the category by name, so move the user's expenses over to the new name
+      if (oldName !== newName) {
+        const { error: expensesError } = await supabase
+          .from('expenses')
+          .update({ category: newName })
+          .eq('category', oldName)
+          .eq('user_id', user.id);
+        if (expensesError) throw expensesError;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
       setEditingId(null);
-      toast.success('Category updated');
+      setName('');
+      toast({ title: 'Category updated' });
     },
+    onError: showError("Couldn't rename the category"),
   });
 
   const deleteMutation = useMutation({
@@ -67,8 +81,9 @@ export default function CategoryManager() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
-      toast.success('Category deleted');
+      toast({ title: 'Category deleted' });
     },
+    onError: showError("Couldn't delete the category"),
   });
 
   const handleSubmit = (e) => {
@@ -126,7 +141,8 @@ export default function CategoryManager() {
                       size="icon" 
                       variant="ghost" 
                       className="h-8 w-8 text-green-600"
-                      onClick={() => updateMutation.mutate({ id: cat.id, newName: name })}
+                      disabled={!name.trim() || updateMutation.isPending}
+                      onClick={() => updateMutation.mutate({ id: cat.id, oldName: cat.name, newName: name.trim() })}
                     >
                       <Check className="w-4 h-4" />
                     </Button>

@@ -16,7 +16,13 @@ export function json(body, status = 200, headers = {}) {
   });
 }
 
-// Verifies the Supabase session token sent by the browser.
+// Optional comma-separated allow-list (Vercel env); when set, only these accounts may use the Drive API
+const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '')
+  .split(',')
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+
+// Verifies the Supabase session token sent by the browser and returns the user, or null.
 export async function requireUser(request) {
   const authHeader = request.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) return null;
@@ -28,7 +34,9 @@ export async function requireUser(request) {
     headers: { Authorization: authHeader, apikey: anonKey },
   });
   if (!res.ok) return null;
-  return res.json();
+  const user = await res.json();
+  if (ALLOWED_EMAILS.length && !ALLOWED_EMAILS.includes(user.email?.toLowerCase())) return null;
+  return user;
 }
 
 // Checks the `is_admin` flag (profiles table) for the user behind the request's session token.
@@ -115,7 +123,7 @@ export async function getReceiptFile(fileId) {
   if (!/^[\w-]+$/.test(fileId || '')) return null;
 
   try {
-    const file = await driveFetch(`/files/${fileId}?fields=id,name,mimeType,parents,trashed`).then((r) => r.json());
+    const file = await driveFetch(`/files/${fileId}?fields=id,name,mimeType,parents,trashed,appProperties`).then((r) => r.json());
     if (file.trashed || file.mimeType === FOLDER_MIME) return null;
     return file;
   } catch (err) {
@@ -184,28 +192,37 @@ export async function moveFile(file, { parentId, name }) {
   return oldParents;
 }
 
-// Trashes an expense folder once its last receipt is gone. Never touches the root or trip folders.
-export async function trashIfEmptyExpenseFolder(folderId) {
-  if (!folderId || folderId === (await getFolderId())) return;
+// Trashes a folder tagged with `tagKey` once it's empty. Never touches the root folder.
+// Returns the trashed folder's metadata, or null if it was kept.
+async function trashIfEmpty(folderId, tagKey) {
+  if (!folderId || folderId === (await getFolderId())) return null;
 
-  const folder = await driveFetch(`/files/${folderId}?fields=mimeType,appProperties,trashed`).then((r) => r.json());
-  if (folder.trashed || folder.mimeType !== FOLDER_MIME || !folder.appProperties?.expenseId) return;
+  const folder = await driveFetch(`/files/${folderId}?fields=mimeType,appProperties,parents,trashed`).then((r) => r.json());
+  if (folder.trashed || folder.mimeType !== FOLDER_MIME || !folder.appProperties?.[tagKey]) return null;
 
   const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
   const { files } = await driveFetch(`/files?q=${q}&fields=files(id)&pageSize=1`).then((r) => r.json());
-  if (files?.length) return;
+  if (files?.length) return null;
 
   await driveFetch(`/files/${folderId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ trashed: true }),
   });
+  return folder;
 }
 
-export async function uploadFile({ name, mimeType, data }) {
+// Trashes an expense folder once its last receipt is gone, and then the trip folder once its last
+// expense folder is gone (organizing recreates it when needed).
+export async function trashIfEmptyExpenseFolder(folderId) {
+  const folder = await trashIfEmpty(folderId, 'expenseId');
+  for (const parentId of folder?.parents || []) await trashIfEmpty(parentId, 'tripId');
+}
+
+export async function uploadFile({ name, mimeType, data, appProperties }) {
   const folderId = await getFolderId();
   const boundary = `trippy-${crypto.randomUUID()}`;
-  const metadata = JSON.stringify({ name, parents: [folderId] });
+  const metadata = JSON.stringify({ name, parents: [folderId], appProperties });
 
   const body = Buffer.concat([
     Buffer.from(

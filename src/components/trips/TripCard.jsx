@@ -10,7 +10,8 @@ export default function TripCard({ trip, expenses = [] }) {
     .reduce((acc, curr) => acc + (curr.cost || 0), 0);
   
   const remaining = (trip.received_amount || 0) - totalSpent;
-  const percentUsed = Math.min(100, (totalSpent / (trip.received_amount || 1)) * 100);
+  // Not capped, so going over budget shows (e.g. 130%) and turns the bar red
+  const percentUsed = (totalSpent / (trip.received_amount || 1)) * 100;
 
   return (
     <Link to={createPageUrl(`TripDetails?id=${trip.id}`)}>
@@ -49,11 +50,11 @@ export default function TripCard({ trip, expenses = [] }) {
           </div>
 
           <div className="space-y-1.5">
-            <Progress value={percentUsed} className={`h-2 ${percentUsed > 100 ? 'bg-red-100' : 'bg-gray-100'}`} indicatorClassName={percentUsed > 100 ? 'bg-red-500' : (percentUsed > 80 ? 'bg-amber-500' : 'bg-indigo-500')} />
+            <Progress value={Math.min(100, percentUsed)} className={`h-2 ${percentUsed > 100 ? 'bg-red-100' : 'bg-gray-100'}`} indicatorClassName={percentUsed > 100 ? 'bg-red-500' : (percentUsed > 80 ? 'bg-amber-500' : 'bg-indigo-500')} />
             <div className="flex justify-between text-xs">
               <span className="text-slate-500">{percentUsed.toFixed(0)}% used</span>
               <span className={`font-medium ${remaining < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                {remaining < 0 ? '-' : ''}EGP {Math.abs(remaining).toLocaleString()} remaining
+                EGP {Math.abs(remaining).toLocaleString()} {remaining < 0 ? 'over' : 'remaining'}
               </span>
             </div>
           </div>

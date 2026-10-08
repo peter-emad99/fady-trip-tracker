@@ -16,7 +16,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data: trips, isLoading: tripsLoading } = useQuery({
+  const { data: trips = [], isLoading: tripsLoading, isError: tripsError, refetch: refetchTrips } = useQuery({
     queryKey: ['trips'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -26,10 +26,9 @@ export default function Dashboard() {
       if (error) throw error;
       return data;
     },
-    initialData: []
   });
 
-  const { data: expenses, isLoading: expensesLoading } = useQuery({
+  const { data: expenses = [], isLoading: expensesLoading } = useQuery({
     queryKey: ['expenses'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -41,7 +40,6 @@ export default function Dashboard() {
       return data;
     },
     // We load all expenses to calculate totals on dashboard. For scale, this should be done differently (e.g. separate aggregation entity or backend function), but fine for this scale.
-    initialData: []
   });
 
   const createTripMutation = useMutation({
@@ -137,11 +135,18 @@ export default function Dashboard() {
       </div>
 
       {/* Trip Grid */}
-      {tripsLoading ? (
+      {/* Wait for expenses too, so the cards don't flash EGP 0 spent */}
+      {tripsLoading || expensesLoading ? (
         <div className="grid gap-6 md:grid-cols-2">
           {[1, 2, 3].map(i => (
             <div key={i} className="h-48 bg-gray-100 rounded-2xl animate-pulse" />
           ))}
+        </div>
+      ) : tripsError ? (
+        <div className="text-center py-12">
+          <h3 className="text-lg font-medium text-slate-900">Couldn't load your trips</h3>
+          <p className="text-slate-500 mb-4">Check your connection and try again.</p>
+          <Button variant="outline" onClick={() => refetchTrips()}>Try again</Button>
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2">
@@ -153,8 +158,8 @@ export default function Dashboard() {
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <FolderPlus className="w-8 h-8 text-gray-400" />
               </div>
-              <h3 className="text-lg font-medium text-slate-900">No trips found</h3>
-              <p className="text-slate-500">Create your first trip to get started!</p>
+              <h3 className="text-lg font-medium text-slate-900">{searchTerm ? 'No matching trips' : 'No trips yet'}</h3>
+              <p className="text-slate-500">{searchTerm ? 'Try a different search.' : 'Create your first trip to get started!'}</p>
             </div>
           )}
         </div>

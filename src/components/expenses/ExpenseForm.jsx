@@ -12,6 +12,8 @@ import { useAuth } from '@/lib/AuthContext';
 import { uploadReceipt, deleteReceipt, organizeReceipts, isDriveReceipt } from '@/api/receiptStorage';
 import { toast } from '@/components/ui/use-toast';
 import { loadOpenCV } from '@/lib/docScanner';
+import { format } from 'date-fns';
+import ConfirmDialog from '@/components/ConfirmDialog';
 
 const ReceiptReview = React.lazy(() => import('./ReceiptReview'));
 
@@ -20,9 +22,10 @@ const receiptActionClass =
 
 export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose, onSuccess }) {
   const { user } = useAuth();
-  const { register, handleSubmit, setValue, watch, getValues, formState: { errors, isSubmitting } } = useForm({
+  const { register, handleSubmit, setValue, watch, getValues, formState: { errors, isSubmitting, isDirty } } = useForm({
     defaultValues: {
-      date: expenseToEdit?.date || new Date().toISOString().split('T')[0],
+      // Local date: toISOString() is UTC, which is still yesterday just after midnight in Egypt
+      date: expenseToEdit?.date || format(new Date(), 'yyyy-MM-dd'),
       trip_id: tripId,
       category: expenseToEdit?.category || categories[0]?.name || 'Other',
       trip_budget_id: expenseToEdit?.trip_budget_id || '',
@@ -40,6 +43,24 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       // Photos waiting for review: { files, index, source: 'camera' | 'upload', version }
       const [review, setReview] = React.useState(null);
       const [budgets, setBudgets] = React.useState([]);
+      const [confirmDiscard, setConfirmDiscard] = React.useState(false);
+
+      // Receipts only change in Drive when the expense is saved:
+      // - uploadedHere: uploaded while this form was open; deleted if it's closed without saving
+      // - removedSaved: already saved on the expense; deleted once the expense saves without them
+      const initialUrls = React.useRef(getValues('receipt_urls') || []).current;
+      const uploadedHere = React.useRef(new Set());
+      const removedSaved = React.useRef([]);
+      const saved = React.useRef(false);
+      const closed = React.useRef(false);
+
+      React.useEffect(() => {
+        closed.current = false;
+        return () => {
+          closed.current = true;
+          if (!saved.current) uploadedHere.current.forEach((url) => deleteQuietly(url));
+        };
+      }, []);
 
       // Fetch trip budgets
       React.useEffect(() => {
@@ -68,6 +89,13 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       const results = await Promise.allSettled(files.map((file) => uploadReceipt(file, expenseId)));
       const newUrls = results.filter(r => r.status === 'fulfilled').map(r => r.value);
       const failed = results.filter(r => r.status === 'rejected');
+
+      // The form was closed while these were uploading, so nothing will ever reference them
+      if (closed.current) {
+        newUrls.forEach((url) => deleteQuietly(url));
+        return;
+      }
+      newUrls.forEach((url) => uploadedHere.current.add(url));
 
       const currentUrls = getValues('receipt_urls') || [];
       setValue('receipt_urls', [...currentUrls, ...newUrls]);
@@ -120,19 +148,31 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       setReview(null);
       };
 
-      const removeReceipt = async (indexToRemove) => {
+      const removeReceipt = (indexToRemove) => {
       const currentUrls = getValues('receipt_urls') || [];
       const urlToRemove = currentUrls[indexToRemove];
-      // Remove it from the form right away; the file is deleted in the background
       setValue('receipt_urls', currentUrls.filter((_, index) => index !== indexToRemove));
+      if (!urlToRemove) return;
 
-      if (urlToRemove) {
-        try {
-          await deleteReceipt(urlToRemove);
-        } catch (err) {
-          console.error('Error removing receipt:', err);
-        }
+      if (uploadedHere.current.delete(urlToRemove)) {
+        // Never saved anywhere, so it can go right away
+        deleteQuietly(urlToRemove);
+      } else {
+        // Still on the saved expense: delete it only once the expense saves without it
+        removedSaved.current.push(urlToRemove);
       }
+      };
+
+      const hasChanges = () =>
+      isDirty ||
+      pending.length > 0 ||
+      !!review ||
+      JSON.stringify(getValues('receipt_urls') || []) !== JSON.stringify(initialUrls);
+
+      const requestClose = () => {
+      if (isSubmitting) return;
+      if (hasChanges()) setConfirmDiscard(true);
+      else onClose();
       };
 
   const onSubmit = async (data) => {
@@ -156,11 +196,18 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
         });
         if (error) throw error;
       }
-      // Not awaited: filing receipts into trip/expense folders shouldn't delay closing the form
+      saved.current = true;
+      // Not awaited: tidying Drive shouldn't delay closing the form
+      removedSaved.current.forEach((url) => deleteQuietly(url));
       if (data.receipt_urls?.some(isDriveReceipt)) organizeReceipts({ expenseId });
       onSuccess();
     } catch (error) {
       console.error('Failed to save expense', error);
+      toast({
+        variant: 'destructive',
+        title: "Couldn't save the expense",
+        description: error.message || 'Check your connection and try again.',
+      });
     }
   };
 
@@ -168,6 +215,14 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
 
 
   return (
+    <>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 0.5 }}
+      exit={{ opacity: 0 }}
+      onClick={requestClose}
+      className="fixed inset-0 bg-black z-40"
+    />
     <motion.div
       initial={{ opacity: 0, y: '100%' }}
       animate={{ opacity: 1, y: 0 }}
@@ -177,7 +232,7 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
     >
       <div className="flex items-center justify-between p-4 border-b border-gray-100">
         <h2 className="text-lg font-bold">{expenseToEdit ? 'Edit Expense' : 'Add New Expense'}</h2>
-        <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-gray-100">
+        <Button variant="ghost" size="icon" onClick={requestClose} aria-label="Close" className="rounded-full hover:bg-gray-100">
           <X className="w-5 h-5" />
         </Button>
       </div>
@@ -396,5 +451,22 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
         </Button>
       </div>
     </motion.div>
+
+    <ConfirmDialog
+      confirm={confirmDiscard && {
+        title: 'Discard changes?',
+        description: "Your changes and any receipts you added to this expense won't be saved.",
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        onConfirm: onClose,
+      }}
+      onClose={() => setConfirmDiscard(false)}
+    />
+    </>
   );
+}
+
+// Drive cleanup that the user doesn't need to wait for or hear about
+function deleteQuietly(url) {
+  deleteReceipt(url).catch((err) => console.error('Failed to delete receipt file:', err));
 }
