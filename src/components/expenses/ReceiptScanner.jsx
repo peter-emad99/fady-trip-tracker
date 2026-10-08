@@ -88,7 +88,21 @@ export default function ReceiptScanner({ file, onDone, onRetake, onCancel }) {
   };
 
   const startEdit = () => {
-    setDraft(corners);
+    // Nothing detected means the corners sit on the photo edges; start them a bit inside
+    // so all four handles are easy to see and grab
+    if (found) {
+      setDraft(corners);
+    } else {
+      const { width, height } = canvasRef.current;
+      const mx = width * 0.1;
+      const my = height * 0.1;
+      setDraft([
+        { x: mx, y: my },
+        { x: width - mx, y: my },
+        { x: width - mx, y: height - my },
+        { x: mx, y: height - my },
+      ]);
+    }
     setStage('edit');
   };
 
@@ -130,6 +144,8 @@ export default function ReceiptScanner({ file, onDone, onRetake, onCancel }) {
   const canvas = canvasRef.current;
   const imageSize = canvas ? Math.max(canvas.width, canvas.height) : 0;
   const handleRadius = imageSize * 0.022;
+  // Room around the photo so handles on its edges are fully visible
+  const viewPadding = handleRadius * 1.4;
   const polygonPoints = draft?.map((c) => `${c.x},${c.y}`).join(' ');
   const dragPoint = dragging !== null && draft ? draft[dragging] : null;
   const loupeSpan = imageSize * 0.08; // image pixels shown across the magnifier
@@ -184,7 +200,7 @@ export default function ReceiptScanner({ file, onDone, onRetake, onCancel }) {
           <>
             <svg
               ref={svgRef}
-              viewBox={`0 0 ${canvas.width} ${canvas.height}`}
+              viewBox={`${-viewPadding} ${-viewPadding} ${canvas.width + viewPadding * 2} ${canvas.height + viewPadding * 2}`}
               preserveAspectRatio="xMidYMid meet"
               className="w-full h-full touch-none"
               onPointerMove={handlePointerMove}
