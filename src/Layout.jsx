@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Plane, LayoutGrid, LogOut, Gauge, Sun, Moon, Monitor, CircleUserRound, CloudOff, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Plane, LayoutGrid, BarChart3, LogOut, Gauge, Sun, Moon, Monitor, CircleUserRound, CloudOff, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { useTheme } from '@/lib/theme';
 import {
@@ -28,7 +28,8 @@ export default function Layout({ children }) {
   const { theme, setTheme } = useTheme();
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const isUsage = location.pathname === '/Usage';
-  const isTrips = !isUsage;
+  const isAnalytics = location.pathname === '/Analytics';
+  const isTrips = !isUsage && !isAnalytics;
   const online = useOnline();
   const outbox = useOutbox();
   const unsynced = outbox.filter((op) => !(op.kind === 'delete' && op.runAfter > Date.now()));
@@ -50,6 +51,10 @@ export default function Layout({ children }) {
             <Link to="/" aria-label="Trips" aria-current={isTrips ? 'page' : undefined} className={navItemClass(isTrips)}>
               <LayoutGrid className="h-5 w-5" />
               <span className="hidden sm:inline">Trips</span>
+            </Link>
+            <Link to="/Analytics" aria-label="Analytics" aria-current={isAnalytics ? 'page' : undefined} className={navItemClass(isAnalytics)}>
+              <BarChart3 className="h-5 w-5" />
+              <span className="hidden sm:inline">Analytics</span>
             </Link>
             {isAdmin && (
               <Link to="/Usage" aria-label="Usage" aria-current={isUsage ? 'page' : undefined} className={navItemClass(isUsage)}>

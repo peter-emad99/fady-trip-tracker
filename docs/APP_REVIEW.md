@@ -171,6 +171,18 @@ Every screen was checked at 375px and 320px wide (no sideways scrolling), in lig
   - Deleting an expense asks first ("Delete this expense?"), then Undo is still offered.
   - Every expense card has Edit and a red Delete button in its bottom-right corner on all screen sizes, replacing the ⋯ menu that phones didn't have.
   - Also fixed: toasts now close by themselves after a few seconds, and their ✕ button is visible on phones.
+- [x] **Trip analytics** (the trip's Analytics tab; the original Spending Breakdown pie is kept).
+  - Pace: daily budget, spending per day, what's left per day, and a forecast ("At this pace the trip will cost…").
+  - Spending per day as a bar chart against the daily budget, with the average.
+  - Categories listed under the pie with amount, share and count.
+  - Who spent it (from "Assigned to"), receipt coverage, and the 5 biggest expenses (tap to open).
+  - A trip without an end date counts its days up to its last expense.
+- [x] **Analytics page** (new page in the top bar; the trips list stays the main page).
+  - Total spent, this month, this year, average per trip and per trip day.
+  - Monthly trend for the last 12 months.
+  - Budget vs spent for each trip, linking to the trip.
+  - Categories across all trips (pie and list).
+- [ ] **End trip / Reopen trip.** On hold for now.
 - [ ] **Multi-currency:** a currency and exchange rate per expense, with a converted total.
 - [ ] **Trip sharing** with other travelers. This goes well with split and settle-up.
 - [x] **Offline support.**

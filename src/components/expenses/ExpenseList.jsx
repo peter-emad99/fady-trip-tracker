@@ -3,7 +3,6 @@ import { formatMoney, formatDate } from "@/lib/format";
 import {
   User,
   Image as ImageIcon,
-  Pencil,
   Images,
   Search,
   SlidersHorizontal,
@@ -530,7 +529,7 @@ function ExpenseRow({ expense, colorKey, onEdit, onDelete }) {
 
   return (
     // The whole card opens the expense (a full-size button underneath); the receipt link and the
-    // Edit / Delete buttons sit above it and stay separately tappable.
+    // Delete button sit above it and stay separately tappable.
     <div className="relative flex gap-3 rounded-xl border border-gray-100 bg-card p-3 shadow-sm transition-shadow hover:shadow-md sm:p-4">
       <button
         type="button"
@@ -618,7 +617,7 @@ function ExpenseRow({ expense, colorKey, onEdit, onDelete }) {
           </div>
         )}
 
-        {/* Notes on the left, Edit / Delete in the bottom-right corner */}
+        {/* Notes on the left, Delete in the bottom-right corner */}
         <div className="mt-1 flex items-end gap-2">
           <p
             className="min-w-0 flex-1 pb-1.5 text-sm leading-snug text-slate-600 line-clamp-2"
@@ -627,15 +626,6 @@ function ExpenseRow({ expense, colorKey, onEdit, onDelete }) {
             {expense.notes}
           </p>
           <div className="pointer-events-auto relative -mb-1.5 -mr-1.5 flex shrink-0 items-center">
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`Edit ${expense.category} expense`}
-              className="h-9 w-9 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600"
-              onClick={() => onEdit(expense)}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
             <Button
               variant="ghost"
               size="icon"

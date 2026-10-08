@@ -61,7 +61,7 @@ import ExpenseForm from "../components/expenses/ExpenseForm";
 import ExpenseList from "../components/expenses/ExpenseList";
 
 // Only needed when the Analytics tab is opened
-const ExpenseChart = lazy(() => import("../components/expenses/ExpenseChart"));
+const TripAnalytics = lazy(() => import("../components/analytics/TripAnalytics"));
 
 export default function TripDetails() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -679,18 +679,24 @@ export default function TripDetails() {
         </TabsContent>
 
         <TabsContent value="analytics" className="pb-20">
-          <div className="bg-card p-6 rounded-2xl border border-gray-100 shadow-sm">
-            <h3 className="text-lg font-bold mb-6 text-center">
-              Spending Breakdown
-            </h3>
-            <Suspense
-              fallback={
-                <div className="h-72 rounded-2xl bg-gray-50 animate-pulse" />
-              }
-            >
-              <ExpenseChart expenses={expenses || []} categories={categories} />
-            </Suspense>
-          </div>
+          <Suspense
+            fallback={
+              <div className="space-y-4">
+                <div className="h-40 rounded-2xl bg-gray-100 animate-pulse" />
+                <div className="h-72 rounded-2xl bg-gray-100 animate-pulse" />
+              </div>
+            }
+          >
+            <TripAnalytics
+              trip={trip}
+              expenses={expenses || []}
+              categories={categories}
+              onEdit={(expense) => {
+                setEditingExpense(expense);
+                setShowExpenseForm(true);
+              }}
+            />
+          </Suspense>
         </TabsContent>
       </Tabs>
 

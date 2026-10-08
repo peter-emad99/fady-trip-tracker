@@ -13,6 +13,7 @@ import { uploadOrKeepLocal, deleteReceipt, organizeReceipts, isDriveReceipt } fr
 import { isLocalReceipt } from '@/lib/localReceipts';
 import { isNetworkError } from '@/lib/network';
 import { queueSave, hasPendingSave } from '@/lib/outbox';
+import { useBackToClose } from '@/lib/useBackToClose';
 import ReceiptImage from './ReceiptImage';
 import { toast } from '@/components/ui/use-toast';
 import { loadOpenCV } from '@/lib/docScanner';
@@ -185,11 +186,30 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, people 
       !!review ||
       JSON.stringify(getValues('receipt_urls') || []) !== JSON.stringify(initialUrls);
 
+      // Returns true if the form is closing, false if it stays open
       const requestClose = () => {
-      if (isSubmitting) return;
-      if (hasChanges()) setConfirmDiscard(true);
-      else onClose();
+      if (isSubmitting) return false;
+      if (hasChanges()) {
+        setConfirmDiscard(true);
+        return false;
+      }
+      onClose();
+      return true;
       };
+
+      // Back steps out of the innermost thing open (discard prompt, photo review), then the form,
+      // instead of leaving the trip page
+      useBackToClose(() => {
+        if (confirmDiscard) {
+          setConfirmDiscard(false);
+          return false;
+        }
+        if (review) {
+          setReview(null);
+          return false;
+        }
+        return requestClose();
+      });
 
       // Escape closes the form, unless a menu, the photo review or the discard prompt is handling it
       const requestCloseRef = React.useRef(requestClose);

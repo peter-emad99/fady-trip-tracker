@@ -5,6 +5,7 @@ const loaders = {
   Dashboard: () => import("./pages/Dashboard"),
   TripDetails: () => import("./pages/TripDetails"),
   TripBudget: () => import("./pages/TripBudget"),
+  Analytics: () => import("./pages/Analytics"),
   Usage: () => import("./pages/Usage"),
 };
 
