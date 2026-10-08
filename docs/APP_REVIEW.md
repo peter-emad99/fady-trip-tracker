@@ -11,11 +11,11 @@ Review date: 2026-10-08. `[x]` = done, `[ ]` = not done yet.
   - Files: `api/receipts.js`.
 - [x] **2. Any Google account could use the owner's Drive.**
   - New uploads are tagged with the person who uploaded them. Only that person, or an admin, can delete them; anyone else gets "Forbidden".
-  - Optional `ALLOWED_EMAILS` environment variable in Vercel (comma-separated). When it's set, only those accounts can upload, delete or organize receipts. When it's empty, nothing changes.
+  - Optional `ALLOWED_EMAILS` environment variable in Vercel: the Google accounts allowed to **connect the receipts Drive** (`/api/google/connect`). Other accounts are refused, and their access is revoked immediately. It doesn't limit uploads: any signed-in user can add receipts.
   - Files: `api/_lib/google.js`, `api/receipts.js`.
   - **Still open:**
     - Receipts uploaded before today have no tag, so any signed-in user who knows a file's id can still delete them, as before.
-    - Anyone can still sign in to the app itself. To lock that down, set `ALLOWED_EMAILS` or turn off new sign-ups in Supabase.
+    - Anyone can still sign in to the app itself. To lock that down, turn off new sign-ups in Supabase.
 - [x] **3. Deleting an expense had no confirmation, and its receipts were deleted first.**
   - There's now a confirmation dialog showing the amount, category and date.
   - The database row is deleted first. The receipts are deleted only after that succeeds.

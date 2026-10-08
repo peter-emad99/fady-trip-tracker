@@ -1,5 +1,7 @@
 // GET /api/google/callback -> exchanges Google's code for a refresh token and shows it once,
 // so the Drive owner can copy it and send it to whoever manages the Vercel settings.
+// When ALLOWED_EMAILS is set, only those Google accounts get a code; others are refused.
+import { mayConnectDrive } from '../_lib/google.js';
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -63,6 +65,20 @@ export async function GET(request) {
   const about = await fetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress),storageQuota', {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   }).then((r) => (r.ok ? r.json() : {}));
+
+  const email = about.user?.emailAddress;
+  if (!email || !mayConnectDrive(email)) {
+    // Cancel the access Google just granted, so the unused code is worthless
+    await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(tokens.refresh_token)}`, { method: 'POST' }).catch(() => {});
+    console.warn(`Drive connect refused for ${email || 'unknown account'}: not in ALLOWED_EMAILS`);
+    return page(
+      'Account not allowed',
+      `<h1>This Google account isn't allowed</h1>
+<p><b>${escapeHtml(email || 'This account')}</b> isn't on the list of accounts that can connect the receipts Google Drive, so nothing was connected.</p>
+<p>Open the connect link again and choose an allowed account, or ask the app owner to add this email to <code>ALLOWED_EMAILS</code>.</p>`,
+      403,
+    );
+  }
 
   return page(
     'Google Drive connected',

@@ -16,22 +16,23 @@ export function json(body, status = 200, headers = {}) {
   });
 }
 
-// Optional allow-list (Vercel env ALLOWED_EMAILS); when set, only these accounts may use the Drive API.
+// Optional allow-list (Vercel env ALLOWED_EMAILS) of the Google accounts that may connect the receipts
+// Drive (see api/google/callback.js). It doesn't limit uploads: any signed-in user can add receipts.
 // Emails can be separated by commas, semicolons, spaces or new lines, and may be quoted.
 const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '')
   .split(/[\s,;]+/)
   .map((email) => email.replace(/^["'<]+|["'>]+$/g, '').trim().toLowerCase())
   .filter(Boolean);
 
-// Checks the browser's Supabase session and the allow-list.
-// Returns { user } when allowed, or { error } with a response that says why not.
+// True when no list is set, or the email is on it
+export function mayConnectDrive(email) {
+  return !ALLOWED_EMAILS.length || ALLOWED_EMAILS.includes(String(email || '').toLowerCase());
+}
+
+// Checks the browser's Supabase session. Returns { user }, or { error } with a 401 response.
 export async function checkUser(request) {
   const user = await sessionUser(request);
   if (!user) return { error: json({ error: 'Your session has expired. Sign out and sign in again.' }, 401) };
-  if (ALLOWED_EMAILS.length && !ALLOWED_EMAILS.includes(user.email?.toLowerCase())) {
-    console.warn(`Refused ${user.email}: not in ALLOWED_EMAILS`);
-    return { error: json({ error: `${user.email} isn't allowed to use receipts (not in ALLOWED_EMAILS)` }, 403) };
-  }
   return { user };
 }
 
