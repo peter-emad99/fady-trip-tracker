@@ -8,12 +8,13 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/use-toast';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { CATEGORY_COLORS, categoryTone, nextFreeColor } from '@/lib/categoryColor';
 
 const showError = (title) => (error) => toast({ variant: 'destructive', title, description: error.message });
 
 // Pass open/onOpenChange to open it from elsewhere (e.g. a menu); otherwise it shows its own button
 export default function CategoryManager({ open, onOpenChange }) {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [ownOpen, setOwnOpen] = useState(false);
   const controlled = open !== undefined;
@@ -22,6 +23,7 @@ export default function CategoryManager({ open, onOpenChange }) {
   const [editingId, setEditingId] = useState(null);
   const [name, setName] = useState('');
   const [confirm, setConfirm] = useState(null);
+  const [pickingId, setPickingId] = useState(null); // category whose colour palette is open
 
   const { data: categories, isLoading } = useQuery({
     queryKey: ['categories'],
@@ -39,7 +41,7 @@ export default function CategoryManager({ open, onOpenChange }) {
     mutationFn: async (newName) => {
       const { data, error } = await supabase
         .from('categories')
-        .insert([{ name: newName, user_id: user.id }])
+        .insert([{ name: newName, user_id: user.id, color: nextFreeColor(categories) }])
         .select();
       if (error) throw error;
       return data;
@@ -51,6 +53,27 @@ export default function CategoryManager({ open, onOpenChange }) {
     },
     onError: showError("Couldn't create the category"),
   });
+
+  // Colour changes show straight away and roll back if saving fails
+  const colorMutation = useMutation({
+    mutationFn: async ({ id, color }) => {
+      const { error } = await supabase.from('categories').update({ color }).eq('id', id);
+      if (error) throw error;
+    },
+    onMutate: ({ id, color }) => {
+      const previous = queryClient.getQueryData(['categories']);
+      queryClient.setQueryData(['categories'], (old) => old?.map((c) => (c.id === id ? { ...c, color } : c)));
+      return { previous };
+    },
+    onError: (error, _vars, context) => {
+      queryClient.setQueryData(['categories'], context?.previous);
+      showError("Couldn't change the colour")(error);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['categories'] }),
+  });
+
+  // Your own categories, plus the shared (system) ones for admins
+  const canEdit = (cat) => (cat.user_id ? cat.user_id === user?.id : isAdmin === true);
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, oldName, newName }) => {
@@ -116,6 +139,7 @@ export default function CategoryManager({ open, onOpenChange }) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Manage Categories</DialogTitle>
+          <p className="text-sm text-slate-500">Tap a colour dot to choose that category's colour.</p>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="flex gap-2 mt-4">
@@ -136,7 +160,8 @@ export default function CategoryManager({ open, onOpenChange }) {
             <p className="text-center text-sm text-slate-500">Loading...</p>
           ) : (
             categories?.map((cat) => (
-              <div key={cat.id} className="flex items-center justify-between p-2 rounded-lg border border-gray-100 bg-gray-50/50">
+              <div key={cat.id} className="rounded-lg border border-gray-100 bg-gray-50/50">
+              <div className="flex items-center justify-between p-2">
                 {editingId === cat.id ? (
                   <div className="flex items-center gap-2 flex-1 mr-2">
                     <Input 
@@ -173,8 +198,18 @@ export default function CategoryManager({ open, onOpenChange }) {
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-slate-700">{cat.name}</span>
+                    <div className="flex min-w-0 items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={!canEdit(cat)}
+                        aria-label={`Colour of ${cat.name}: ${categoryTone(cat.name, cat.color).label}${cat.color ? '' : ' (automatic)'}`}
+                        aria-expanded={pickingId === cat.id}
+                        onClick={() => setPickingId(pickingId === cat.id ? null : cat.id)}
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full hover:bg-gray-100 disabled:cursor-default disabled:hover:bg-transparent"
+                      >
+                        <span className={`h-5 w-5 rounded-full ring-2 ring-white ${categoryTone(cat.name, cat.color).dot}`} />
+                      </button>
+                      <span className="truncate text-sm font-medium text-slate-700">{cat.name}</span>
                       {!cat.user_id && (
                         <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase tracking-wider font-bold">
                           System
@@ -182,7 +217,7 @@ export default function CategoryManager({ open, onOpenChange }) {
                       )}
                     </div>
                     <div className="flex items-center gap-1">
-                      {cat.user_id ? (
+                      {cat.user_id === user?.id ? (
                         <>
                           <Button 
                             size="icon" 
@@ -211,11 +246,48 @@ export default function CategoryManager({ open, onOpenChange }) {
                           </Button>
                         </>
                       ) : (
-                        <span className="text-[10px] text-slate-400 italic mr-2">Locked</span>
+                        <span className="text-[10px] text-slate-400 italic mr-2">{cat.user_id ? 'Not yours' : 'Locked'}</span>
                       )}
                     </div>
                   </>
                 )}
+              </div>
+              {pickingId === cat.id && (
+                <div className="border-t border-gray-100 p-2">
+                  <div role="radiogroup" aria-label={`Colour for ${cat.name}`} className="grid grid-cols-6 gap-1.5">
+                    {CATEGORY_COLORS.map((c) => (
+                      <button
+                        key={c.key}
+                        type="button"
+                        role="radio"
+                        aria-checked={cat.color === c.key}
+                        aria-label={c.label}
+                        onClick={() => {
+                          colorMutation.mutate({ id: cat.id, color: c.key });
+                          setPickingId(null);
+                        }}
+                        className={`flex h-10 items-center justify-center rounded-lg hover:bg-gray-100 ${cat.color === c.key ? 'bg-gray-100' : ''}`}
+                      >
+                        <span className={`flex h-7 w-7 items-center justify-center rounded-full text-white ${c.dot}`}>
+                          {cat.color === c.key && <Check className="h-4 w-4" />}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  {cat.color && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        colorMutation.mutate({ id: cat.id, color: null });
+                        setPickingId(null);
+                      }}
+                      className="mt-1 h-9 w-full rounded-lg text-xs font-medium text-slate-500 hover:bg-gray-100"
+                    >
+                      Use automatic colour
+                    </button>
+                  )}
+                </div>
+              )}
               </div>
             ))
           )}

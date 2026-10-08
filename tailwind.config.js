@@ -1,5 +1,5 @@
 // These palettes read CSS variables (src/index.css) so dark mode can flip them
-const PALETTES = ['slate', 'gray', 'indigo', 'red', 'amber', 'emerald', 'blue', 'orange', 'green'];
+const PALETTES = ['slate', 'gray', 'indigo', 'red', 'amber', 'emerald', 'blue', 'orange', 'green', 'sky', 'teal', 'pink', 'purple'];
 const STEPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
 const themedPalettes = Object.fromEntries(
   PALETTES.map((name) => [

@@ -645,6 +645,7 @@ export default function TripDetails() {
         <TabsContent value="list" className="pb-20">
           <ExpenseList
             expenses={expenses || []}
+            categories={categories}
             tripId={id}
             onDelete={(expenseId) => {
               const expense = expenses?.find((e) => e.id === expenseId);
@@ -671,7 +672,7 @@ export default function TripDetails() {
                 <div className="h-72 rounded-2xl bg-gray-50 animate-pulse" />
               }
             >
-              <ExpenseChart expenses={expenses || []} />
+              <ExpenseChart expenses={expenses || []} categories={categories} />
             </Suspense>
           </div>
         </TabsContent>

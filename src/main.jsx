@@ -1,3 +1,5 @@
+// Must stay first: in mock mode it installs the fake backend before anything else loads
+import "./dev/setup";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "@/App.jsx";

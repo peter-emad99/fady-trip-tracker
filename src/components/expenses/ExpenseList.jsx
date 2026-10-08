@@ -16,7 +16,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import ReceiptImage from "./ReceiptImage";
-import { categoryTone } from "@/lib/categoryColor";
+import { categoryTone, categoryColorMap } from "@/lib/categoryColor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -72,7 +72,9 @@ export default function ExpenseList({
   onDelete,
   onEdit,
   onAdd,
+  categories = [],
 }) {
+  const colors = useMemo(() => categoryColorMap(categories), [categories]);
   const storageKey = tripId ? `trippy.expenseFilters.${tripId}` : null;
   const [filters, setFilters] = useState(() => loadFilters(storageKey));
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
@@ -487,6 +489,7 @@ export default function ExpenseList({
                   <ExpenseRow
                     key={expense.id}
                     expense={expense}
+                    colorKey={colors[expense.category]}
                     onEdit={onEdit}
                     onDelete={onDelete}
                   />
@@ -519,8 +522,8 @@ function groupByDay(expenses) {
   return groups;
 }
 
-function ExpenseRow({ expense, onEdit, onDelete }) {
-  const tone = categoryTone(expense.category);
+function ExpenseRow({ expense, colorKey, onEdit, onDelete }) {
+  const tone = categoryTone(expense.category, colorKey);
   const receipts = expense.receipt_urls?.length
     ? expense.receipt_urls
     : expense.receipt_url

@@ -134,6 +134,17 @@ Every screen was checked at 375px and 320px wide (no sideways scrolling), in lig
   - The Usage page header fits a phone.
   - Admin usage stats aren't saved for offline use.
 
+## 🎨 Category colours and local testing
+
+- [x] **Choose each category's colour** in Categories: tap the colour dot, then pick from 12 colours (all of them work in dark mode), or choose "Use automatic colour".
+  - The colour is stored in the existing `categories.color` column.
+  - It's used in the expense list, the form's category chips and the Analytics pie chart.
+  - New categories get a colour no other category is using yet.
+  - Shared (system) categories can be coloured by admins only.
+- [x] **Mock mode** (`npm run dev:mock`): the whole app runs locally on fake data with no accounts.
+  - A badge switches the app offline/online and resets the data.
+  - See the README.
+
 ## 💡 Feature ideas (waiting for your go-ahead)
 
 - [ ] **Split and settle-up (who owes whom):** a list of travelers per trip, "paid by" and "split between" on each expense, and a settle-up summary. It builds on the existing `assigned_to` field.

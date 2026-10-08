@@ -1,9 +1,10 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { formatMoney } from '@/lib/format';
+import { categoryTone, categoryColorMap } from '@/lib/categoryColor';
 
-const COLORS = ['#3B82F6', '#F59E0B', '#8B5CF6', '#10B981', '#EC4899', '#6366F1', '#9CA3AF'];
-
-export default function ExpenseChart({ expenses }) {
+// Slices use each category's colour, the same as in the expense list
+export default function ExpenseChart({ expenses, categories = [] }) {
+  const colors = categoryColorMap(categories);
   // Group by category
   const data = Object.values(expenses.reduce((acc, curr) => {
     const cat = curr.category || 'Other';
@@ -37,7 +38,7 @@ export default function ExpenseChart({ expenses }) {
             stroke="hsl(var(--card))"
           >
             {data.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+              <Cell key={`cell-${index}`} fill={categoryTone(entry.name, colors[entry.name]).hex} />
             ))}
           </Pie>
           <Tooltip 

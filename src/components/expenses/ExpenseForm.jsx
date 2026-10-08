@@ -345,7 +345,7 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, people 
                     className="sr-only"
                     {...register('category')}
                   />
-                  <span aria-hidden className={`h-2.5 w-2.5 shrink-0 rounded-full ${categoryTone(cat.name).dot}`} />
+                  <span aria-hidden className={`h-2.5 w-2.5 shrink-0 rounded-full ${categoryTone(cat.name, cat.color).dot}`} />
                   <span className="min-w-0 truncate text-xs font-medium">{cat.name}</span>
                 </label>
               ))}
