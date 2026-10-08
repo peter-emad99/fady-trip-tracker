@@ -222,7 +222,7 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
 
               {onAdd && (
                 <Button
-                  className="gap-2 bg-slate-900 hover:bg-slate-800"
+                  className="hidden md:inline-flex gap-2 bg-slate-900 hover:bg-slate-800"
                   onClick={onAdd}
                 >
                   <Plus className="w-4 h-4" />
