@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
-import { deleteReceipt } from "@/api/receiptStorage";
+import { deleteReceipt, organizeReceipts } from "@/api/receiptStorage";
 import { format } from "date-fns";
 import {
   Plus,
@@ -137,6 +137,8 @@ export default function TripDetails() {
       if (error) throw error;
     },
     onSuccess: () => {
+      // Keep the trip's Google Drive folder name in sync
+      organizeReceipts({ tripId: id });
       queryClient.invalidateQueries({ queryKey: ["trip", id] });
       queryClient.invalidateQueries({ queryKey: ["trips"] });
       setIsEditOpen(false);

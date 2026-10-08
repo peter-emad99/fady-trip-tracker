@@ -108,20 +108,98 @@ export async function getFolderId() {
   return cachedFolderId;
 }
 
-// Returns file metadata only if the file is a receipt inside our folder.
-// Prevents the API from touching anything else (e.g. the folder itself).
+// Returns file metadata for a receipt, or null for anything else (folders, trashed or unknown ids).
+// The drive.file scope already limits the token to files this app created, so receipts can live
+// in any trip/expense subfolder.
 export async function getReceiptFile(fileId) {
   if (!/^[\w-]+$/.test(fileId || '')) return null;
 
-  const folderId = await getFolderId();
   try {
-    const file = await driveFetch(`/files/${fileId}?fields=id,mimeType,parents,trashed`).then((r) => r.json());
-    if (file.trashed || file.mimeType === FOLDER_MIME || !file.parents?.includes(folderId)) return null;
+    const file = await driveFetch(`/files/${fileId}?fields=id,name,mimeType,parents,trashed`).then((r) => r.json());
+    if (file.trashed || file.mimeType === FOLDER_MIME) return null;
     return file;
   } catch (err) {
     if (err.status === 404) return null;
     throw err;
   }
+}
+
+// Reads rows through Supabase's REST API as the calling user, so row-level security applies.
+export async function supabaseSelect(request, pathAndQuery) {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+  const res = await fetch(`${supabaseUrl}/rest/v1/${pathAndQuery}`, {
+    headers: { Authorization: request.headers.get('authorization'), apikey: anonKey },
+  });
+  if (!res.ok) throw new Error(`Supabase ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+// Finds the folder tagged with { key: value } (e.g. tripId), creating it if needed, and keeps its
+// name and parent up to date. Tagging by id means renaming a trip renames its folder.
+export async function ensureFolder({ key, value, name, parentId, create = true }) {
+  if (!/^[\w-]+$/.test(value || '')) throw new Error(`Invalid ${key}`);
+
+  const q = `mimeType='${FOLDER_MIME}' and trashed=false and appProperties has { key='${key}' and value='${value}' }`;
+  const { files } = await driveFetch(`/files?q=${encodeURIComponent(q)}&fields=files(id,name,parents)&pageSize=1`).then((r) => r.json());
+  const folder = files?.[0];
+
+  if (!folder) {
+    if (!create) return null;
+    const created = await driveFetch('/files?fields=id', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, mimeType: FOLDER_MIME, parents: [parentId], appProperties: { [key]: value } }),
+    }).then((r) => r.json());
+    return created.id;
+  }
+
+  const moveParams = parentId && !folder.parents?.includes(parentId)
+    ? `&addParents=${parentId}&removeParents=${(folder.parents || []).join(',')}`
+    : '';
+  if (folder.name !== name || moveParams) {
+    await driveFetch(`/files/${folder.id}?fields=id${moveParams}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+  }
+  return folder.id;
+}
+
+// Moves a file into a folder (and optionally renames it). The file id, and so its URL, stays the same.
+export async function moveFile(file, { parentId, name }) {
+  const oldParents = (file.parents || []).filter((id) => id !== parentId);
+  const moveParams = file.parents?.includes(parentId) && !oldParents.length
+    ? ''
+    : `&addParents=${parentId}${oldParents.length ? `&removeParents=${oldParents.join(',')}` : ''}`;
+  if (!moveParams && file.name === name) return oldParents;
+
+  await driveFetch(`/files/${file.id}?fields=id${moveParams}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  return oldParents;
+}
+
+// Trashes an expense folder once its last receipt is gone. Never touches the root or trip folders.
+export async function trashIfEmptyExpenseFolder(folderId) {
+  if (!folderId || folderId === (await getFolderId())) return;
+
+  const folder = await driveFetch(`/files/${folderId}?fields=mimeType,appProperties,trashed`).then((r) => r.json());
+  if (folder.trashed || folder.mimeType !== FOLDER_MIME || !folder.appProperties?.expenseId) return;
+
+  const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
+  const { files } = await driveFetch(`/files?q=${q}&fields=files(id)&pageSize=1`).then((r) => r.json());
+  if (files?.length) return;
+
+  await driveFetch(`/files/${folderId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trashed: true }),
+  });
 }
 
 export async function uploadFile({ name, mimeType, data }) {

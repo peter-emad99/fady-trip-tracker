@@ -1,4 +1,4 @@
-import { json, requireUser, driveFetch, getReceiptFile, uploadFile } from './_lib/google.js';
+import { json, requireUser, driveFetch, getReceiptFile, uploadFile, trashIfEmptyExpenseFolder } from './_lib/google.js';
 
 // Vercel rejects request bodies over 4.5 MB; the client compresses images well below this.
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -63,6 +63,8 @@ export async function DELETE(request) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ trashed: true }),
     });
+    // Remove the expense's folder too once its last receipt is gone
+    for (const parentId of file.parents || []) await trashIfEmptyExpenseFolder(parentId);
     return json({ ok: true });
   } catch (err) {
     console.error(err);

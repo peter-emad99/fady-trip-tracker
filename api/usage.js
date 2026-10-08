@@ -1,4 +1,4 @@
-import { json, requireUser, isAdmin, driveFetch, getFolderId } from './_lib/google.js';
+import { json, requireUser, isAdmin, driveFetch } from './_lib/google.js';
 
 // GET /api/usage -> Google Drive quota plus how much of it the receipts folder uses.
 export async function GET(request) {
@@ -6,10 +6,11 @@ export async function GET(request) {
   if (!(await isAdmin(request))) return json({ error: 'Only admins can view usage' }, 403);
 
   try {
-    const about = await driveFetch('/about?fields=storageQuota').then((r) => r.json());
+    const about = await driveFetch('/about?fields=storageQuota,user(emailAddress,displayName)').then((r) => r.json());
 
-    const folderId = await getFolderId();
-    const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
+    // Receipts now live in trip/expense subfolders. The drive.file scope only lists files this
+    // app created, so "every non-folder file" is exactly the receipts.
+    const q = encodeURIComponent(`mimeType != 'application/vnd.google-apps.folder' and trashed=false`);
     let receiptsBytes = 0;
     let receiptsCount = 0;
     let pageToken = '';
@@ -29,6 +30,8 @@ export async function GET(request) {
     return json(
       {
         drive: {
+          accountEmail: about.user?.emailAddress || null,
+          accountName: about.user?.displayName || null,
           limit: quota.limit ? Number(quota.limit) : null, // null = unlimited
           usage: Number(quota.usage || 0),
           usageInDrive: Number(quota.usageInDrive || 0),

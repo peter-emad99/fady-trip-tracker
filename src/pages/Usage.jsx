@@ -5,6 +5,8 @@ import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import LegacyReceiptMigration from "@/components/usage/LegacyReceiptMigration";
+import ReceiptBackup from "@/components/usage/ReceiptBackup";
 
 // Supabase free plan limits
 const DB_LIMIT_BYTES = 500 * 1024 * 1024;
@@ -191,6 +193,10 @@ export default function Usage() {
         >
           <div>
             <Row
+              label="Account"
+              value={drive?.accountName ? `${drive.accountName} (${drive.accountEmail})` : drive?.accountEmail || "Unknown"}
+            />
+            <Row
               label="Receipts"
               value={`${drive?.receiptsCount.toLocaleString()} files · ${formatBytes(drive?.receiptsBytes)}`}
             />
@@ -222,8 +228,11 @@ export default function Usage() {
           ) : (
             <p className="text-sm text-slate-500">No files left in Supabase Storage.</p>
           )}
+          <LegacyReceiptMigration driveReady={!!drive} onFinished={refresh} />
         </UsageCard>
       )}
+
+      <ReceiptBackup />
 
       <p className="text-xs text-slate-400 text-center">
         Bandwidth (egress) and monthly active users aren't exposed to the app — check them in the Supabase dashboard.

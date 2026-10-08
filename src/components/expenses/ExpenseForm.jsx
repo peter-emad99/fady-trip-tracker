@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
-import { uploadReceipt, deleteReceipt } from '@/api/receiptStorage';
+import { uploadReceipt, deleteReceipt, organizeReceipts, isDriveReceipt } from '@/api/receiptStorage';
 import { toast } from '@/components/ui/use-toast';
 
 export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose, onSuccess }) {
@@ -113,6 +113,8 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
         });
         if (error) throw error;
       }
+      // Not awaited: filing receipts into trip/expense folders shouldn't delay closing the form
+      if (data.receipt_urls?.some(isDriveReceipt)) organizeReceipts({ expenseId });
       onSuccess();
     } catch (error) {
       console.error('Failed to save expense', error);

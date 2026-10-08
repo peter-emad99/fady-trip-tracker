@@ -28,10 +28,10 @@ async function compressImage(file) {
   }
 }
 
-// Uploads a receipt image to Google Drive and returns the URL to store on the expense.
-export async function uploadReceipt(file, namePrefix) {
-  const body = await compressImage(file);
-  const ext = body.type === 'image/jpeg' ? 'jpg' : file.name.split('.').pop();
+// The server rejects bodies over 4 MB (Vercel's hard limit is 4.5 MB)
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+
+async function uploadBlob(body, namePrefix, ext) {
   const name = `${namePrefix}_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
 
   const res = await fetch(`/api/receipts?name=${encodeURIComponent(name)}`, {
@@ -43,6 +43,13 @@ export async function uploadReceipt(file, namePrefix) {
 
   const { url } = await res.json();
   return url;
+}
+
+// Uploads a receipt image to Google Drive and returns the URL to store on the expense.
+export async function uploadReceipt(file, namePrefix) {
+  const body = await compressImage(file);
+  const ext = body.type === 'image/jpeg' ? 'jpg' : file.name.split('.').pop();
+  return uploadBlob(body, namePrefix, ext);
 }
 
 // Deletes a receipt from wherever it lives: Google Drive, or the legacy Supabase bucket.
@@ -63,7 +70,70 @@ export async function deleteReceipt(url) {
   const parts = url.split('/receipts/');
   if (parts.length > 1) {
     const filePath = parts[1].split('?')[0];
-    const { error } = await supabase.storage.from('receipts').remove([filePath]);
+    const { data, error } = await supabase.storage.from('receipts').remove([filePath]);
+    if (error) throw error;
+    // Supabase returns no error when a storage policy blocks the delete; it just removes nothing
+    if (!data?.length) throw new Error('Supabase file was not deleted (missing or not allowed)');
+  }
+}
+
+export const isDriveReceipt = (url) => !!url?.startsWith(DRIVE_URL_PREFIX);
+
+// Files receipts into "Trippy Receipts/<trip>/<date - category - cost>/" in Drive, or renames a
+// trip's folder. Only tidies folders, so failures are logged rather than shown to the user.
+export async function organizeReceipts({ expenseId, tripId }) {
+  try {
+    const res = await fetch('/api/organize-receipts', {
+      method: 'POST',
+      headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
+      body: JSON.stringify(expenseId ? { expenseId } : { tripId }),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `Organize failed (${res.status})`);
+  } catch (err) {
+    console.error('Failed to organize receipts in Google Drive', err);
+  }
+}
+
+const MIME_BY_EXT = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', heic: 'image/heic' };
+
+// Copies one old Supabase Storage receipt to Google Drive and points every expense that uses it at
+// the Drive copy. The Supabase file is NOT deleted. The original is uploaded unchanged unless it's
+// over the upload limit, and the Drive copy is downloaded back and checked before any expense changes.
+export async function migrateLegacyReceipt(url, expenseIds) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(res.status === 404 ? 'File no longer exists in Supabase' : `Download failed (${res.status})`);
+
+  const fileName = decodeURIComponent(url.split('/').pop().split('?')[0]);
+  let ext = (fileName.includes('.') ? fileName.split('.').pop() : 'jpg').toLowerCase();
+  const original = await res.blob();
+  const type = original.type.startsWith('image/') ? original.type : MIME_BY_EXT[ext] || 'image/jpeg';
+  let body = new File([original], fileName, { type });
+
+  if (body.size > MAX_UPLOAD_BYTES) {
+    body = await compressImage(body);
+    if (body.size > MAX_UPLOAD_BYTES) throw new Error('File is too large to upload, even after resizing');
+    if (body.type === 'image/jpeg') ext = 'jpg';
+  }
+
+  const newUrl = await uploadBlob(body, expenseIds[0], ext);
+
+  // Verify the Drive copy before touching any expense
+  const check = await fetch(newUrl, { cache: 'no-store' });
+  const copied = check.ok ? (await check.arrayBuffer()).byteLength : -1;
+  if (copied !== body.size) {
+    throw new Error(`Drive copy didn't match the original (${copied} vs ${body.size} bytes); expense left unchanged`);
+  }
+
+  for (const expenseId of expenseIds) {
+    const { error } = await supabase.rpc('replace_receipt_url', {
+      p_expense_id: expenseId,
+      p_old_url: url,
+      p_new_url: newUrl,
+    });
     if (error) throw error;
   }
+
+  for (const expenseId of expenseIds) await organizeReceipts({ expenseId });
+
+  return { newUrl, resized: body.size !== original.size };
 }
