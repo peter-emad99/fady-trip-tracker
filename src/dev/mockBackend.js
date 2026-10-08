@@ -7,7 +7,7 @@
 //   - the Supabase tables (trips, expenses, categories, trip_budgets) and RPCs
 //   - the /api/receipts and /api/organize-receipts serverless functions
 // Data is kept in localStorage (key "trippy.mockDb"), so changes survive a reload.
-// A small "Mock data" badge (bottom-left) can switch to offline mode and reset the data.
+// A small "Mock data" badge (bottom-left, hidden while a dialog is open) can switch to offline mode and reset the data.
 
 const DB_KEY = 'trippy.mockDb';
 const OFFLINE_KEY = 'trippy.mockOffline';
@@ -271,7 +271,15 @@ export function installMockBackend() {
     );
   }
   renderBadge();
-  const mount = () => document.body.appendChild(badge);
+  // Step aside while a sheet, dialog or the expense form is open, so it never covers their buttons
+  const hideUnderDialogs = () => {
+    const open = document.querySelector('[role="dialog"], [role="alertdialog"], [aria-modal="true"]');
+    badge.style.display = open ? 'none' : 'flex';
+  };
+  const mount = () => {
+    document.body.appendChild(badge);
+    new MutationObserver(hideUnderDialogs).observe(document.body, { childList: true, subtree: true });
+  };
   if (document.body) mount();
   else document.addEventListener('DOMContentLoaded', mount);
 
