@@ -1,7 +1,34 @@
 import jsPDF from 'jspdf';
+import { formatMoney, formatDate } from '@/lib/format';
+
+const ARABIC = /[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
+
+// jsPDF's built-in Helvetica has no Arabic letters, so Arabic text would print as garbage.
+// When the trip has any, embed IBM Plex Sans Arabic (Latin + Arabic, from /public/fonts).
+async function loadArabicFont(doc) {
+  for (const [style, file] of [['normal', 'IBMPlexSansArabic-Regular.ttf'], ['bold', 'IBMPlexSansArabic-Bold.ttf']]) {
+    const res = await fetch(`/fonts/${file}`);
+    if (!res.ok) throw new Error(`Couldn't load the Arabic font (${res.status})`);
+    doc.addFileToVFS(file, toBase64(await res.arrayBuffer()));
+    doc.addFont(file, 'PlexArabic', style);
+  }
+  return 'PlexArabic';
+}
+
+function toBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
 
 export const exportTripToPDF = async (trip, expenses) => {
   const doc = new jsPDF();
+  const texts = [trip.name, ...expenses.flatMap((e) => [e.category, e.notes, e.assigned_to])];
+  const font = texts.some((t) => t && ARABIC.test(t)) ? await loadArabicFont(doc) : 'helvetica';
+  doc.setFont(font, 'normal');
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 20;
@@ -26,7 +53,7 @@ export const exportTripToPDF = async (trip, expenses) => {
   // Trip Info
   doc.setFontSize(12);
   doc.setTextColor(100, 100, 100);
-  const dates = `${trip.start_date || 'TBD'} - ${trip.end_date || 'TBD'}`;
+  const dates = `${trip.start_date ? formatDate(trip.start_date) : 'TBD'} – ${trip.end_date ? formatDate(trip.end_date) : 'TBD'}`;
   doc.text(dates, margin, yPos);
   yPos += 15;
 
@@ -48,10 +75,10 @@ export const exportTripToPDF = async (trip, expenses) => {
   yPos += 8;
   doc.setFontSize(14);
   doc.setTextColor(0, 0, 0);
-  doc.text(`EGP ${trip.received_amount?.toLocaleString()}`, margin + 5, yPos);
-  doc.text(`EGP ${totalSpent.toLocaleString()}`, margin + 65, yPos);
+  doc.text(formatMoney(trip.received_amount), margin + 5, yPos);
+  doc.text(formatMoney(totalSpent), margin + 65, yPos);
   doc.setTextColor(remaining < 0 ? 220 : 0, remaining < 0 ? 20 : 150, remaining < 0 ? 60 : 100);
-  doc.text(`EGP ${remaining.toLocaleString()}`, margin + 125, yPos);
+  doc.text(remaining < 0 ? `${formatMoney(-remaining)} over` : formatMoney(remaining), margin + 125, yPos);
   
   yPos += 25;
 
@@ -90,7 +117,7 @@ export const exportTripToPDF = async (trip, expenses) => {
   for (const [cat, amount] of sortedCategories) {
     checkPageBreak(7);
     doc.text(cat, margin, yPos);
-    doc.text(`EGP ${amount.toLocaleString()}`, margin + 80, yPos);
+    doc.text(formatMoney(amount), margin + 80, yPos);
     yPos += 7;
   }
 
@@ -116,16 +143,15 @@ export const exportTripToPDF = async (trip, expenses) => {
 
   // Sort expenses for export
   const sortedExpenses = [...expenses].sort((a, b) => {
-    const dateA = new Date(a.date);
-    const dateB = new Date(b.date);
-    if (dateB - dateA !== 0) return dateB - dateA;
+    const byDate = (b.date || '').localeCompare(a.date || '');
+    if (byDate !== 0) return byDate;
     return new Date(b.created_at || 0) - new Date(a.created_at || 0);
   });
 
   for (const expense of sortedExpenses) {
     checkPageBreak(15);
 
-    const dateStr = new Date(expense.date).toLocaleDateString();
+    const dateStr = formatDate(expense.date, 'MMM d, yyyy');
     doc.text(dateStr, margin, yPos);
     doc.text(expense.category || 'Other', margin + 30, yPos);
     
@@ -134,7 +160,7 @@ export const exportTripToPDF = async (trip, expenses) => {
     if (notes.length > 30) notes = notes.substring(0, 27) + '...';
     doc.text(notes, margin + 70, yPos);
     
-    doc.text(`EGP ${expense.cost?.toFixed(2)}`, pageWidth - margin, yPos, { align: 'right' });
+    doc.text(formatMoney(expense.cost), pageWidth - margin, yPos, { align: 'right' });
     yPos += 8;
   }
 
@@ -157,21 +183,21 @@ export const exportTripToPDF = async (trip, expenses) => {
       
       const innerY = yPos + 12;
       doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(font, 'bold');
       doc.setTextColor(30, 41, 59);
       doc.text(expense.category || 'Other', margin + 5, innerY);
       
       doc.setFontSize(14);
       doc.setTextColor(239, 68, 68);
-      doc.text(`EGP ${expense.cost?.toFixed(2)}`, pageWidth - margin - 5, innerY, { align: 'right' });
+      doc.text(formatMoney(expense.cost), pageWidth - margin - 5, innerY, { align: 'right' });
       
       yPos += cardHeight + 5;
 
       // Metadata
       doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
+      doc.setFont(font, 'normal');
       doc.setTextColor(100, 100, 100);
-      doc.text(`Date: ${new Date(expense.date).toLocaleDateString()}`, margin, yPos);
+      doc.text(`Date: ${formatDate(expense.date)}`, margin, yPos);
       
       if (expense.assigned_to) {
           doc.text(`Assigned to: ${expense.assigned_to}`, pageWidth - margin, yPos, { align: 'right' });
@@ -230,7 +256,7 @@ export const exportTripToPDF = async (trip, expenses) => {
 
             doc.addImage(imgData, 'JPEG', margin, yPos, w, h);
             yPos += h + 15;
-          } catch (e) {
+          } catch {
             doc.setFontSize(9);
             doc.setTextColor(200, 50, 50);
             doc.text(`[Error loading receipt ${i + 1}]`, margin, yPos);

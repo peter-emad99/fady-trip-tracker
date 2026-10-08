@@ -1,4 +1,4 @@
-import React from 'react';
+import { Plane } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,9 +7,12 @@ export default function Login() {
   const { login } = useAuth();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+    <div className="min-h-dvh flex items-center justify-center bg-gray-50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
+          <div className="mx-auto mb-2 w-fit rounded-2xl bg-indigo-600 p-3">
+            <Plane className="h-7 w-7 text-white" />
+          </div>
           <CardTitle className="text-2xl font-bold">Welcome to Trippy</CardTitle>
           <CardDescription>Sign in to manage your trips and expenses</CardDescription>
         </CardHeader>

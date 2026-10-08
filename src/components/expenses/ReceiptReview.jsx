@@ -208,8 +208,9 @@ export default function ReceiptReview({
   let headerText = total > 1 ? `Receipt ${index + 1} of ${total}` : 'Review receipt';
   if (editing) headerText = 'Drag the corners to the receipt edges';
 
+  // Always-dark screen: keep-light-palette stops dark mode from flipping its colours
   return createPortal(
-    <div className="fixed inset-0 z-[60] bg-slate-950 text-white flex flex-col select-none">
+    <div className="keep-light-palette fixed inset-0 z-[60] bg-slate-950 text-white flex flex-col select-none">
       <div className="flex items-center justify-between gap-2 p-3">
         <Button type="button" variant="ghost" size="icon" onClick={onCancel} className="shrink-0 rounded-full text-white hover:bg-white/10 hover:text-white">
           <X className="w-5 h-5" />

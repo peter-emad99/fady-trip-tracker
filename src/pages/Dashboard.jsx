@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import TripCard from '../components/trips/TripCard';
 import CategoryManager from '../components/expenses/CategoryManager';
+import { toast } from '@/components/ui/use-toast';
 
 export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -29,24 +30,29 @@ export default function Dashboard() {
   });
 
   const { data: expenses = [], isLoading: expensesLoading } = useQuery({
-    queryKey: ['expenses'],
+    queryKey: ['expenses', 'totals'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('expenses')
-        .select('*')
-        .order('date', { ascending: false })
-        .order('created_at', { ascending: false });
+      // Only what the totals need, not every column of every expense
+      const { data, error } = await supabase.from('expenses').select('trip_id, cost');
       if (error) throw error;
       return data;
     },
-    // We load all expenses to calculate totals on dashboard. For scale, this should be done differently (e.g. separate aggregation entity or backend function), but fine for this scale.
   });
+
+  const spentByTrip = useMemo(() => {
+    const totals = {};
+    for (const expense of expenses) {
+      totals[expense.trip_id] = (totals[expense.trip_id] || 0) + Number(expense.cost || 0);
+    }
+    return totals;
+  }, [expenses]);
 
   const createTripMutation = useMutation({
     mutationFn: async (data) => {
       const { data: newTrip, error } = await supabase.from('trips').insert({
         ...data,
         received_amount: parseFloat(data.received_amount),
+        end_date: data.end_date || null,
         user_id: user.id
       }).select().single();
       
@@ -56,7 +62,9 @@ export default function Dashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trips'] });
       setIsCreateOpen(false);
-    }
+      toast({ title: 'Trip created' });
+    },
+    onError: (error) => toast({ variant: 'destructive', title: "Couldn't create the trip", description: error.message }),
   });
 
   const handleCreateTrip = (e) => {
@@ -76,7 +84,7 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold text-slate-900">My Trips</h1>
           <p className="text-slate-500 mt-1">Manage your travel budgets and expenses</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <CategoryManager />
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
@@ -98,7 +106,7 @@ export default function Dashboard() {
                 <Label htmlFor="amount">Total Budget</Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-medium">EGP</span>
-                  <Input id="amount" name="received_amount" type="number" step="0.01" className="pl-12" placeholder="2000.00" required />
+                  <Input id="amount" name="received_amount" type="number" inputMode="decimal" min="0" step="0.01" className="pl-12" placeholder="2000.00" required />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -128,7 +136,7 @@ export default function Dashboard() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         <Input 
           placeholder="Search trips..." 
-          className="pl-10 bg-white border-gray-200 focus:ring-indigo-500 rounded-xl"
+          className="pl-10 bg-card border-gray-200 focus:ring-indigo-500 rounded-xl"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
@@ -151,7 +159,7 @@ export default function Dashboard() {
       ) : (
         <div className="grid gap-6 md:grid-cols-2">
           {filteredTrips.map(trip => (
-            <TripCard key={trip.id} trip={trip} expenses={expenses} />
+            <TripCard key={trip.id} trip={trip} spent={spentByTrip[trip.id] || 0} />
           ))}
           {filteredTrips.length === 0 && (
             <div className="col-span-full text-center py-12">

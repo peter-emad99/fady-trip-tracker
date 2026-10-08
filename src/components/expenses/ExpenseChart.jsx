@@ -1,4 +1,5 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { formatMoney } from '@/lib/format';
 
 const COLORS = ['#3B82F6', '#F59E0B', '#8B5CF6', '#10B981', '#EC4899', '#6366F1', '#9CA3AF'];
 
@@ -22,7 +23,7 @@ export default function ExpenseChart({ expenses }) {
   }
 
   return (
-    <div className="h-72 w-full">
+    <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
@@ -33,16 +34,25 @@ export default function ExpenseChart({ expenses }) {
             outerRadius={80}
             paddingAngle={5}
             dataKey="value"
+            stroke="hsl(var(--card))"
           >
             {data.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
             ))}
           </Pie>
           <Tooltip 
-            formatter={(value) => `EGP ${value.toFixed(2)}`}
-            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+            formatter={(value) => formatMoney(value)}
+            // Theme colours, so the tooltip is readable in dark mode too
+            contentStyle={{
+              borderRadius: '12px',
+              border: '1px solid hsl(var(--border))',
+              background: 'hsl(var(--popover))',
+              color: 'hsl(var(--popover-foreground))',
+              boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+            }}
+            itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
           />
-          <Legend verticalAlign="bottom" height={36} iconType="circle" />
+          <Legend verticalAlign="bottom" iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
         </PieChart>
       </ResponsiveContainer>
     </div>

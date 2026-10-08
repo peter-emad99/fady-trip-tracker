@@ -30,7 +30,7 @@ function UsageCard({ icon: Icon, title, subtitle, used, limit, children, error }
   const level = levelClasses(percent);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm space-y-4">
+    <div className="bg-card rounded-2xl border border-gray-100 p-5 shadow-sm space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="bg-indigo-50 p-2 rounded-xl shrink-0">
@@ -85,7 +85,7 @@ function TrippyFolderUsage({ drive }) {
         <span className="text-sm font-medium text-slate-700">Trippy Receipts folder</span>
         <span className="text-sm font-semibold text-indigo-700 shrink-0">{formatBytes(drive.receiptsBytes)}</span>
       </div>
-      <Progress value={Math.max(percent, drive.receiptsBytes ? 0.5 : 0)} className="h-1.5 bg-white" indicatorClassName="bg-indigo-400" />
+      <Progress value={Math.max(percent, drive.receiptsBytes ? 0.5 : 0)} className="h-1.5 bg-card" indicatorClassName="bg-indigo-400" />
       <p className="text-xs text-slate-500">
         {drive.receiptsCount.toLocaleString()} file{drive.receiptsCount === 1 ? "" : "s"} ·{" "}
         {percent < 0.1 && drive.receiptsBytes ? "<0.1" : percent.toFixed(1)}% of this account&apos;s{" "}
@@ -146,7 +146,7 @@ export default function Usage() {
   const legacyStorageBytes = db?.storage_buckets?.reduce((sum, b) => sum + Number(b.bytes || 0), 0) ?? 0;
 
   if (isAdmin === null) {
-    return <div className="h-40 bg-white rounded-2xl border border-gray-100 animate-pulse" />;
+    return <div className="h-40 bg-card rounded-2xl border border-gray-100 animate-pulse" />;
   }
 
   if (!isAdmin) {
@@ -179,7 +179,7 @@ export default function Usage() {
       </div>
 
       {dbQuery.isLoading ? (
-        <div className="h-40 bg-white rounded-2xl border border-gray-100 animate-pulse" />
+        <div className="h-40 bg-card rounded-2xl border border-gray-100 animate-pulse" />
       ) : (
         <UsageCard
           icon={Database}
@@ -203,7 +203,7 @@ export default function Usage() {
       )}
 
       {driveQuery.isLoading ? (
-        <div className="h-40 bg-white rounded-2xl border border-gray-100 animate-pulse" />
+        <div className="h-40 bg-card rounded-2xl border border-gray-100 animate-pulse" />
       ) : (
         <UsageCard
           icon={Cloud}

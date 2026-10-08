@@ -1,10 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, lazy, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/api/supabaseClient";
-import { useAuth } from "@/lib/AuthContext";
 import { deleteReceipt, organizeReceipts } from "@/api/receiptStorage";
-import { format } from "date-fns";
+import { formatMoney, formatDate } from "@/lib/format";
 import {
   Plus,
   ArrowLeft,
@@ -17,6 +16,8 @@ import {
   Pencil,
   Download,
   Trash2,
+  ChevronRight,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -36,13 +37,13 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 
 import ExpenseForm from "../components/expenses/ExpenseForm";
 import ExpenseList from "../components/expenses/ExpenseList";
-import ExpenseChart from "../components/expenses/ExpenseChart";
-import { exportTripToPDF } from "../components/trips/exportTrip";
+
+// Only needed when the Analytics tab is opened
+const ExpenseChart = lazy(() => import("../components/expenses/ExpenseChart"));
 
 export default function TripDetails() {
   const urlParams = new URLSearchParams(window.location.search);
   const id = urlParams.get("id");
-  const { user } = useAuth();
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -52,7 +53,12 @@ export default function TripDetails() {
   const navigate = useNavigate();
 
   // Fetch Trip
-  const { data: trip, isLoading: tripLoading } = useQuery({
+  const {
+    data: trip,
+    isLoading: tripLoading,
+    error: tripError,
+    refetch: refetchTrip,
+  } = useQuery({
     queryKey: ["trip", id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -104,16 +110,25 @@ export default function TripDetails() {
 
       await deleteReceiptFiles([expense]);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses"] });
-      toast({ title: "Expense deleted" });
+    // Remove it from the list straight away; it comes back if the delete fails
+    onMutate: async (expense) => {
+      await queryClient.cancelQueries({ queryKey: ["expenses", id] });
+      const previous = queryClient.getQueryData(["expenses", id]);
+      queryClient.setQueryData(["expenses", id], (old) =>
+        old?.filter((e) => e.id !== expense.id),
+      );
+      return { previous };
     },
-    onError: (error) =>
+    onSuccess: () => toast({ title: "Expense deleted" }),
+    onError: (error, _expense, context) => {
+      queryClient.setQueryData(["expenses", id], context?.previous);
       toast({
         variant: "destructive",
         title: "Couldn't delete the expense",
         description: error.message,
-      }),
+      });
+    },
+    onSettled: () => invalidateTripData(),
   });
 
   const updateTripMutation = useMutation({
@@ -123,7 +138,7 @@ export default function TripDetails() {
         .update({
           ...data,
           received_amount: parseFloat(data.received_amount),
-          user_id: user.id,
+          end_date: data.end_date || null,
         })
         .eq("id", id);
       if (error) throw error;
@@ -134,8 +149,22 @@ export default function TripDetails() {
       queryClient.invalidateQueries({ queryKey: ["trip", id] });
       queryClient.invalidateQueries({ queryKey: ["trips"] });
       setIsEditOpen(false);
+      toast({ title: "Trip updated" });
     },
+    onError: (error) =>
+      toast({
+        variant: "destructive",
+        title: "Couldn't update the trip",
+        description: error.message,
+      }),
   });
+
+  // Everything that shows expense totals: this trip, the Dashboard and the sub-budget pages
+  const invalidateTripData = () => {
+    queryClient.invalidateQueries({ queryKey: ["expenses"] });
+    queryClient.invalidateQueries({ queryKey: ["tripBudgets", id] });
+    queryClient.invalidateQueries({ queryKey: ["budgetExpenses"] });
+  };
 
   const deleteTripMutation = useMutation({
     mutationFn: async () => {
@@ -168,9 +197,17 @@ export default function TripDetails() {
   const handleExport = async () => {
     setIsExporting(true);
     try {
+      // Loaded on demand: the PDF library is large and only needed here
+      const { exportTripToPDF } =
+        await import("../components/trips/exportTrip");
       await exportTripToPDF(trip, expenses);
     } catch (err) {
       console.error("Export failed", err);
+      toast({
+        variant: "destructive",
+        title: "Couldn't export the PDF",
+        description: err.message,
+      });
     } finally {
       setIsExporting(false);
     }
@@ -188,20 +225,54 @@ export default function TripDetails() {
 
   if (tripLoading || expensesLoading)
     return (
-      <div className="p-8 text-center animate-pulse">
-        Loading trip details...
+      <div className="space-y-6" role="status" aria-label="Loading trip">
+        <div className="h-4 w-28 rounded bg-gray-200 animate-pulse" />
+        <div className="h-8 w-2/3 rounded-lg bg-gray-200 animate-pulse" />
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-20 rounded-2xl bg-gray-100 animate-pulse"
+            />
+          ))}
+        </div>
+        <div className="h-40 rounded-2xl bg-gray-100 animate-pulse" />
       </div>
     );
-  if (!trip)
-    return <div className="p-8 text-center text-red-500">Trip not found</div>;
+  if (!trip) {
+    // PGRST116 = no row: the trip was deleted or the link is wrong. Anything else is a load error.
+    const notFound = !tripError || tripError.code === "PGRST116";
+    return (
+      <div className="py-12 text-center">
+        <h2 className="text-lg font-medium text-slate-900">
+          {notFound ? "Trip not found" : "Couldn't load this trip"}
+        </h2>
+        <p className="mt-1 text-slate-500">
+          {notFound
+            ? "It may have been deleted."
+            : "Check your connection and try again."}
+        </p>
+        <div className="mt-4 flex justify-center gap-2">
+          {!notFound && (
+            <Button variant="outline" onClick={() => refetchTrip()}>
+              Try again
+            </Button>
+          )}
+          <Button asChild variant="outline">
+            <Link to="/">Back to trips</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="relative min-h-[calc(100vh-100px)]">
+    <div className="relative">
       {/* Header */}
       <div className="mb-6">
         <Link
           to="/"
-          className="inline-flex items-center text-slate-500 hover:text-slate-900 mb-4 transition-colors"
+          className="-ml-2 mb-2 inline-flex h-10 items-center rounded-lg px-2 text-slate-500 transition-colors hover:text-slate-900"
         >
           <ArrowLeft className="w-4 h-4 mr-1" /> Back to Trips
         </Link>
@@ -214,18 +285,15 @@ export default function TripDetails() {
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-slate-500 mt-1">
               <Calendar className="w-4 h-4 shrink-0" />
               <span className="text-sm">
-                {trip.start_date
-                  ? format(new Date(trip.start_date), "MMM d, yyyy")
-                  : "TBD"}
-                {trip.end_date &&
-                  ` - ${format(new Date(trip.end_date), "MMM d, yyyy")}`}
+                {trip.start_date ? formatDate(trip.start_date) : "TBD"}
+                {trip.end_date && ` – ${formatDate(trip.end_date)}`}
               </span>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
+                <Button variant="outline" className="gap-2 px-3">
                   <Pencil className="w-4 h-4" /> Edit
                 </Button>
               </DialogTrigger>
@@ -253,6 +321,8 @@ export default function TripDetails() {
                         id="amount"
                         name="received_amount"
                         type="number"
+                        inputMode="decimal"
+                        min="0"
                         step="0.01"
                         className="pl-12"
                         defaultValue={trip.received_amount}
@@ -304,22 +374,20 @@ export default function TripDetails() {
             </Dialog>
             <Button
               variant="outline"
-              size="sm"
-              className="gap-2"
+              className="gap-2 px-3"
               onClick={handleExport}
               disabled={isExporting}
             >
               {isExporting ? (
-                <span className="animate-spin">⏳</span>
+                <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <Download className="w-4 h-4" />
               )}
-              Export
+              {isExporting ? "Exporting…" : "Export PDF"}
             </Button>
             <Button
               variant="outline"
-              size="sm"
-              className="gap-2 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+              className="gap-2 px-3 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
               disabled={deleteTripMutation.isPending}
               onClick={() =>
                 setConfirm({
@@ -339,49 +407,54 @@ export default function TripDetails() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-3 mb-8">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-8">
+        {/* The only way into sub-budgets, so it looks and behaves like a button */}
         <Link
           to={`/TripBudget?id=${id}`}
-          className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 hover:bg-indigo-100 transition-colors cursor-pointer"
+          className="group min-w-0 rounded-2xl border border-indigo-200 bg-indigo-50 p-3 transition-colors hover:border-indigo-300 hover:bg-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:p-4"
         >
-          <div className="flex items-center gap-2 mb-1 text-indigo-600">
-            <Wallet className="w-4 h-4" />
-            <span className="text-xs font-bold uppercase tracking-wider">
+          <div className="mb-1 flex items-center gap-1.5 text-indigo-600">
+            <Wallet className="hidden h-4 w-4 shrink-0 sm:block" />
+            <span className="text-[11px] font-bold uppercase sm:text-xs sm:tracking-wider">
               Budget
             </span>
+            <ChevronRight className="ml-auto h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
           </div>
-          <p className="text-lg font-bold text-indigo-900">
-            EGP {trip.received_amount?.toLocaleString()}
+          <p className="text-base font-bold leading-tight text-indigo-900 sm:text-lg">
+            {formatMoney(trip.received_amount)}
+          </p>
+          <p className="mt-1 text-[11px] font-medium text-indigo-600 sm:text-xs">
+            Sub-budgets
           </p>
         </Link>
 
-        <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
-          <div className="flex items-center gap-2 mb-1 text-amber-600">
-            <CreditCard className="w-4 h-4" />
-            <span className="text-xs font-bold uppercase tracking-wider">
+        <div className="min-w-0 rounded-2xl border border-amber-100 bg-amber-50 p-3 sm:p-4">
+          <div className="mb-1 flex items-center gap-1.5 text-amber-600">
+            <CreditCard className="hidden h-4 w-4 shrink-0 sm:block" />
+            <span className="text-[11px] font-bold uppercase sm:text-xs sm:tracking-wider">
               Spent
             </span>
           </div>
-          <p className="text-lg font-bold text-amber-900">
-            EGP {stats.total.toLocaleString()}
+          <p className="text-base font-bold leading-tight text-amber-900 sm:text-lg">
+            {formatMoney(stats.total)}
           </p>
         </div>
 
         <div
-          className={`${stats.remaining < 0 ? "bg-red-50 border-red-100" : "bg-emerald-50 border-emerald-100"} p-4 rounded-2xl border`}
+          className={`${stats.remaining < 0 ? "border-red-100 bg-red-50" : "border-emerald-100 bg-emerald-50"} min-w-0 rounded-2xl border p-3 sm:p-4`}
         >
           <div
-            className={`flex items-center gap-2 mb-1 ${stats.remaining < 0 ? "text-red-600" : "text-emerald-600"}`}
+            className={`mb-1 flex items-center gap-1.5 ${stats.remaining < 0 ? "text-red-600" : "text-emerald-600"}`}
           >
-            <TrendingDown className="w-4 h-4" />
-            <span className="text-xs font-bold uppercase tracking-wider">
-              Left
+            <TrendingDown className="hidden h-4 w-4 shrink-0 sm:block" />
+            <span className="text-[11px] font-bold uppercase sm:text-xs sm:tracking-wider">
+              {stats.remaining < 0 ? "Over budget" : "Remaining"}
             </span>
           </div>
           <p
-            className={`text-lg font-bold ${stats.remaining < 0 ? "text-red-900" : "text-emerald-900"}`}
+            className={`text-base font-bold leading-tight sm:text-lg ${stats.remaining < 0 ? "text-red-900" : "text-emerald-900"}`}
           >
-            EGP {stats.remaining.toLocaleString()}
+            {formatMoney(Math.abs(stats.remaining))}
           </p>
         </div>
       </div>
@@ -389,8 +462,12 @@ export default function TripDetails() {
       {/* Progress Bar */}
       <div className="mb-8">
         <div className="flex justify-between text-xs mb-2 text-slate-500">
-          <span>Budget Usage</span>
-          <span>{stats.percent.toFixed(0)}%</span>
+          <span>Budget spent</span>
+          <span
+            className={stats.percent > 100 ? "font-semibold text-red-600" : ""}
+          >
+            {stats.percent.toFixed(0)}%
+          </span>
         </div>
         <Progress
           value={Math.min(100, stats.percent)}
@@ -419,15 +496,14 @@ export default function TripDetails() {
         <TabsContent value="list" className="pb-20">
           <ExpenseList
             expenses={expenses || []}
+            tripId={id}
             onDelete={(expenseId) => {
               const expense = expenses?.find((e) => e.id === expenseId);
               if (!expense) return;
               setConfirm({
                 title: "Delete this expense?",
-                description: `EGP ${expense.cost?.toLocaleString()} · ${expense.category}${
-                  expense.date
-                    ? ` · ${format(new Date(expense.date), "MMM d")}`
-                    : ""
+                description: `${formatMoney(expense.cost)} · ${expense.category}${
+                  expense.date ? ` · ${formatDate(expense.date, "MMM d")}` : ""
                 }. Its receipts will be deleted too. This can't be undone.`,
                 confirmLabel: "Delete expense",
                 onConfirm: () => deleteExpenseMutation.mutate(expense),
@@ -445,24 +521,31 @@ export default function TripDetails() {
         </TabsContent>
 
         <TabsContent value="analytics" className="pb-20">
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+          <div className="bg-card p-6 rounded-2xl border border-gray-100 shadow-sm">
             <h3 className="text-lg font-bold mb-6 text-center">
               Spending Breakdown
             </h3>
-            <ExpenseChart expenses={expenses || []} />
+            <Suspense
+              fallback={
+                <div className="h-72 rounded-2xl bg-gray-50 animate-pulse" />
+              }
+            >
+              <ExpenseChart expenses={expenses || []} />
+            </Suspense>
           </div>
         </TabsContent>
       </Tabs>
 
-      {/* Floating Action Button */}
+      {/* Floating Action Button (kept clear of the iPhone home bar) */}
       <motion.button
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
+        aria-label="Add expense"
         onClick={() => {
           setEditingExpense(null);
           setShowExpenseForm(true);
         }}
-        className="fixed bottom-8 right-8 w-14 h-14 bg-slate-900 text-white rounded-full shadow-xl shadow-slate-300 flex items-center justify-center hover:bg-slate-800 transition-colors z-40"
+        className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-[max(1.5rem,env(safe-area-inset-right))] z-40 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl shadow-slate-300 transition-colors hover:bg-slate-800 dark:bg-indigo-600 dark:shadow-black/40 dark:hover:bg-indigo-700 sm:bottom-[calc(2rem+env(safe-area-inset-bottom))] sm:right-8"
       >
         <Plus className="w-6 h-6" />
       </motion.button>
@@ -479,9 +562,7 @@ export default function TripDetails() {
             expenseToEdit={editingExpense}
             onClose={() => setShowExpenseForm(false)}
             onSuccess={() => {
-              // Prefix match, so the Dashboard's all-expenses totals refresh too
-              queryClient.invalidateQueries({ queryKey: ["expenses"] });
-              queryClient.invalidateQueries({ queryKey: ["trips"] });
+              invalidateTripData();
               setShowExpenseForm(false);
             }}
           />

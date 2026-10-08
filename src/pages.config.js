@@ -1,14 +1,12 @@
-import Dashboard from "./pages/Dashboard";
-import TripDetails from "./pages/TripDetails";
-import TripBudget from "./pages/TripBudget";
-import Usage from "./pages/Usage";
+import { lazy } from "react";
 import __Layout from "./Layout.jsx";
 
+// Each page loads on first visit, so e.g. the chart and PDF code aren't in the startup bundle
 export const PAGES = {
-  Dashboard: Dashboard,
-  TripDetails: TripDetails,
-  TripBudget: TripBudget,
-  Usage: Usage,
+  Dashboard: lazy(() => import("./pages/Dashboard")),
+  TripDetails: lazy(() => import("./pages/TripDetails")),
+  TripBudget: lazy(() => import("./pages/TripBudget")),
+  Usage: lazy(() => import("./pages/Usage")),
 };
 
 export const pagesConfig = {

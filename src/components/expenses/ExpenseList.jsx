@@ -1,5 +1,5 @@
-import { format } from "date-fns";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { formatMoney, formatDate } from "@/lib/format";
 import {
   User,
   MoreHorizontal,
@@ -11,6 +11,7 @@ import {
   ChevronDown,
   X,
   Plus,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,23 +33,81 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
-export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
-  const [searchTerm, setSearchTerm] = useState("");
+const DEFAULT_FILTERS = {
+  searchTerm: "",
+  selectedCategory: "all",
+  selectedAssignee: "all",
+  dateFrom: "",
+  dateTo: "",
+  minCost: "",
+  maxCost: "",
+  hasNotes: "all",
+  hasReceipts: "all",
+};
+
+// Filters are remembered per trip on this device, so they survive leaving and coming back
+function loadFilters(storageKey) {
+  try {
+    const saved = storageKey && JSON.parse(localStorage.getItem(storageKey));
+    return saved ? { ...DEFAULT_FILTERS, ...saved } : DEFAULT_FILTERS;
+  } catch {
+    return DEFAULT_FILTERS;
+  }
+}
+
+export default function ExpenseList({
+  expenses,
+  tripId,
+  onDelete,
+  onEdit,
+  onAdd,
+}) {
+  const storageKey = tripId ? `trippy.expenseFilters.${tripId}` : null;
+  const [filters, setFilters] = useState(() => loadFilters(storageKey));
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [selectedAssignee, setSelectedAssignee] = useState("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [minCost, setMinCost] = useState("");
-  const [maxCost, setMaxCost] = useState("");
-  const [hasNotes, setHasNotes] = useState("all");
-  const [hasReceipts, setHasReceipts] = useState("all");
+  const {
+    searchTerm,
+    selectedCategory,
+    selectedAssignee,
+    dateFrom,
+    dateTo,
+    minCost,
+    maxCost,
+    hasNotes,
+    hasReceipts,
+  } = filters;
+  const setFilter = (key) => (value) =>
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  const setSearchTerm = setFilter("searchTerm");
+  const setSelectedCategory = setFilter("selectedCategory");
+  const setSelectedAssignee = setFilter("selectedAssignee");
+  const setDateFrom = setFilter("dateFrom");
+  const setDateTo = setFilter("dateTo");
+  const setMinCost = setFilter("minCost");
+  const setMaxCost = setFilter("maxCost");
+  const setHasNotes = setFilter("hasNotes");
+  const setHasReceipts = setFilter("hasReceipts");
+
+  useEffect(() => {
+    if (!storageKey) return;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(filters));
+    } catch {
+      // Storage can be unavailable (private mode); filters just won't be remembered
+    }
+  }, [storageKey, filters]);
 
   const sortedExpenses = useMemo(() => {
     return [...expenses].sort((a, b) => {
-      const dateDiff = new Date(b.date) - new Date(a.date);
+      // "YYYY-MM-DD" strings sort correctly as text
+      const dateDiff = (b.date || "").localeCompare(a.date || "");
       if (dateDiff !== 0) return dateDiff;
       return new Date(b.created_at || 0) - new Date(a.created_at || 0);
     });
@@ -94,7 +153,7 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
         expense.notes,
         expense.cost != null ? String(expense.cost) : "",
         expense.date,
-        expense.date ? format(new Date(expense.date), "MMM d yyyy") : "",
+        formatDate(expense.date, "MMM d yyyy"),
       ]
         .filter(Boolean)
         .join(" ")
@@ -165,22 +224,21 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
     hasReceipts,
   ]);
 
-  const resetFilters = () => {
-    setSearchTerm("");
-    setSelectedCategory("all");
-    setSelectedAssignee("all");
-    setDateFrom("");
-    setDateTo("");
-    setMinCost("");
-    setMaxCost("");
-    setHasNotes("all");
-    setHasReceipts("all");
-  };
+  const resetFilters = () => setFilters(DEFAULT_FILTERS);
+
+  const isFiltered = Boolean(normalizedSearchTerm) || activeFilterCount > 0;
+  const filteredTotal = filteredExpenses.reduce(
+    (sum, expense) => sum + Number(expense.cost || 0),
+    0,
+  );
 
   if (expenses.length === 0) {
     return (
       <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-        <p className="text-slate-500">No expenses recorded yet.</p>
+        <p className="text-slate-700 font-medium">No expenses yet</p>
+        <p className="text-slate-500 text-sm mt-1">
+          Tap the + button to add your first one.
+        </p>
       </div>
     );
   }
@@ -190,7 +248,7 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
       <Collapsible
         open={isFiltersOpen}
         onOpenChange={setIsFiltersOpen}
-        className="bg-white rounded-2xl border border-gray-100 shadow-sm"
+        className="bg-card rounded-2xl border border-gray-100 shadow-sm"
       >
         <div className="p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -206,7 +264,11 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
 
             <div className="flex items-center gap-2 lg:shrink-0">
               <CollapsibleTrigger asChild>
-                <Button variant="outline" className="gap-2">
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  aria-expanded={isFiltersOpen}
+                >
                   <SlidersHorizontal className="w-4 h-4" />
                   Filters
                   {activeFilterCount > 0 && (
@@ -222,7 +284,7 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
 
               {onAdd && (
                 <Button
-                  className="hidden md:inline-flex gap-2 bg-slate-900 hover:bg-slate-800"
+                  className="hidden md:inline-flex gap-2 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:text-white dark:hover:bg-indigo-700"
                   onClick={onAdd}
                 >
                   <Plus className="w-4 h-4" />
@@ -253,7 +315,7 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
                   value={selectedCategory}
                   onValueChange={setSelectedCategory}
                 >
-                  <SelectTrigger className="bg-white">
+                  <SelectTrigger className="bg-card">
                     <SelectValue placeholder="All categories" />
                   </SelectTrigger>
                   <SelectContent>
@@ -275,7 +337,7 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
                   value={selectedAssignee}
                   onValueChange={setSelectedAssignee}
                 >
-                  <SelectTrigger className="bg-white">
+                  <SelectTrigger className="bg-card">
                     <SelectValue placeholder="All assignees" />
                   </SelectTrigger>
                   <SelectContent>
@@ -297,7 +359,7 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
                   type="date"
                   value={dateFrom}
                   onChange={(event) => setDateFrom(event.target.value)}
-                  className="bg-white"
+                  className="bg-card"
                 />
               </div>
 
@@ -309,7 +371,7 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
                   type="date"
                   value={dateTo}
                   onChange={(event) => setDateTo(event.target.value)}
-                  className="bg-white"
+                  className="bg-card"
                 />
               </div>
 
@@ -319,12 +381,13 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
                 </p>
                 <Input
                   type="number"
+                  inputMode="decimal"
                   step="0.01"
                   min="0"
                   value={minCost}
                   onChange={(event) => setMinCost(event.target.value)}
                   placeholder="0.00"
-                  className="bg-white"
+                  className="bg-card"
                 />
               </div>
 
@@ -334,12 +397,13 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
                 </p>
                 <Input
                   type="number"
+                  inputMode="decimal"
                   step="0.01"
                   min="0"
                   value={maxCost}
                   onChange={(event) => setMaxCost(event.target.value)}
                   placeholder="0.00"
-                  className="bg-white"
+                  className="bg-card"
                 />
               </div>
 
@@ -348,7 +412,7 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
                   Notes
                 </p>
                 <Select value={hasNotes} onValueChange={setHasNotes}>
-                  <SelectTrigger className="bg-white">
+                  <SelectTrigger className="bg-card">
                     <SelectValue placeholder="Any" />
                   </SelectTrigger>
                   <SelectContent>
@@ -364,7 +428,7 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
                   Receipts
                 </p>
                 <Select value={hasReceipts} onValueChange={setHasReceipts}>
-                  <SelectTrigger className="bg-white">
+                  <SelectTrigger className="bg-card">
                     <SelectValue placeholder="Any" />
                   </SelectTrigger>
                   <SelectContent>
@@ -378,6 +442,22 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
           </CollapsibleContent>
         </div>
       </Collapsible>
+
+      {/* Count and total for what's shown, so filtering doubles as a quick sum */}
+      <div
+        className="flex items-baseline justify-between px-1 text-sm"
+        aria-live="polite"
+      >
+        <span className="text-slate-500">
+          {isFiltered
+            ? `${filteredExpenses.length} of ${expenses.length} expenses`
+            : `${expenses.length} ${expenses.length === 1 ? "expense" : "expenses"}`}
+        </span>
+        <span className="font-semibold text-slate-900">
+          {isFiltered ? "Filtered total " : "Total "}
+          {formatMoney(filteredTotal)}
+        </span>
+      </div>
 
       {filteredExpenses.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
@@ -393,7 +473,7 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
           {filteredExpenses.map((expense) => (
             <div
               key={expense.id}
-              className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all"
+              className="flex items-center justify-between p-4 bg-card rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all"
             >
               <div className="flex items-center gap-4 flex-1 min-w-0 mr-2">
                 <div className="h-12 w-12 shrink-0 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-sm uppercase">
@@ -406,7 +486,7 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
 
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-slate-600 mt-1">
                     <span className="flex items-center gap-1 whitespace-nowrap">
-                      {format(new Date(expense.date), "MMM d")}
+                      {formatDate(expense.date, "MMM d")}
                     </span>
 
                     {expense.assigned_to && (
@@ -428,7 +508,7 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
                         </span>
                         <Dialog>
                           <DialogTrigger asChild>
-                            <button className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 transition-colors whitespace-nowrap">
+                            <button className="-mx-1.5 -my-2 flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-2 text-indigo-600 transition-colors hover:text-indigo-700">
                               {expense.receipt_urls?.length > 1 ? (
                                 <Images className="w-3 h-3" />
                               ) : (
@@ -439,7 +519,10 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
                                 : "Receipt"}
                             </button>
                           </DialogTrigger>
-                          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto bg-white p-6 rounded-xl">
+                          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto bg-card p-6 rounded-xl">
+                            <DialogTitle className="sr-only">
+                              Receipts for {expense.category}
+                            </DialogTitle>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               {(expense.receipt_urls?.length > 0
                                 ? expense.receipt_urls
@@ -452,6 +535,7 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
                                   <img
                                     src={url}
                                     alt={`Receipt ${idx + 1}`}
+                                    loading="lazy"
                                     className="w-full h-auto object-contain"
                                   />
                                 </div>
@@ -471,9 +555,9 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 shrink-0">
-                <span className="font-bold text-slate-900 text-lg">
-                  -EGP {expense.cost?.toFixed(2)}
+              <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                <span className="font-bold text-slate-900 text-base sm:text-lg whitespace-nowrap">
+                  {formatMoney(expense.cost)}
                 </span>
 
                 <DropdownMenu>
@@ -481,20 +565,25 @@ export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-gray-400 hover:text-gray-600"
+                      aria-label={`Actions for ${expense.category} expense`}
+                      className="h-10 w-10 text-gray-400 hover:text-gray-600"
                     >
                       <MoreHorizontal className="w-4 h-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => onEdit(expense)}>
+                    <DropdownMenuItem
+                      className="py-2.5"
+                      onClick={() => onEdit(expense)}
+                    >
                       <Pencil className="w-4 h-4 mr-2" />
-                      Edit Details
+                      Edit
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      className="text-red-600 focus:text-red-600"
+                      className="py-2.5 text-red-600 focus:text-red-600"
                       onClick={() => onDelete(expense.id)}
                     >
+                      <Trash2 className="w-4 h-4 mr-2" />
                       Delete
                     </DropdownMenuItem>
                   </DropdownMenuContent>

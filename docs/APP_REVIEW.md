@@ -46,39 +46,58 @@ Review date: 2026-10-08. `[x]` = done, `[ ]` = not done yet.
   - It goes back to the trip list without a full page reload.
 - [x] **Small fix found along the way:** after you save an expense, the Dashboard totals now refresh. Before, only that trip's expense list refreshed.
 
-## 🟡 UI/UX improvements (waiting for your go-ahead)
+## 🟡 UI/UX improvements
 
-- [ ] Bigger tap targets: the expense "…" menu, budget edit/delete icons, category icons and the receipt link are 24–32px. Aim for 44px.
-- [ ] Notch and home-bar spacing: add `viewport-fit=cover` to `index.html` and safe-area padding to the add button and the form's bottom bar.
-- [ ] Expense form ergonomics:
-  - Don't pop up the keyboard immediately.
-  - Use `inputMode="decimal"` on the amount so the number pad shows.
-  - Let the budget picker be cleared once set.
-  - Link each label to its field (`htmlFor`), and make Escape close the form.
-- [ ] Replace the remaining browser `confirm()`/`alert()` popups with the in-app dialog: budget delete/add and category delete. Trip and expense delete are done.
-- [ ] Navigation:
-  - Add labels to the nav icons.
-  - Confirm before signing out.
-  - Make the Budget card on the trip page look tappable, since it's the only way to sub-budgets.
-  - Fix the button nested inside a link.
-- [ ] One shared `formatMoney()` helper for consistent amounts (the list, cards, chart and PDF each format differently).
-- [ ] Make sure the three stat cards fit on small phones with large amounts.
-- [ ] PDF export with Arabic text: the default font has no Arabic letters, so embed one.
-- [ ] Dark mode: the colour tokens exist, but components use fixed colours. Switch them to the tokens and add a toggle.
-- [ ] Consistent wording: Left / Remaining / Available / Used / Spent.
-- [ ] Performance:
-  - Lazy-load pages so the chart and PDF libraries load only when needed.
-  - Stop the Dashboard downloading every expense just to add up totals.
-  - Use optimistic updates.
-- [ ] Cleanup:
-  - Remove unused files: `Home.jsx`, `TripExport.jsx`, `UserNotRegisteredError.jsx`, unused ui components.
-  - Remove unused packages: stripe, three, react-leaflet, react-quill, moment, @hello-pangea/dnd, html2canvas.
-  - Remove the leftover setup scripts in the project root.
-- [ ] Filters: remember them, and show the total for the filtered expenses.
-- [ ] Smaller items:
-  - An edited sub-budget can exceed the trip budget (only new ones are checked).
-  - Budget views don't refresh after you save an expense.
-  - Editing a trip rewrites its owner (`user_id`).
+- [x] **Bigger tap targets.**
+  - Buttons are now 40px by default (36px small).
+  - The expense "…" menu, sub-budget edit/delete, category buttons, receipt remove (✕) and the "Receipt" link all have larger touch areas.
+- [x] **Notch and home-bar spacing.**
+  - `viewport-fit=cover` is on.
+  - The nav, page, add button (+), expense form header and Save bar all leave room for the notch and home bar.
+  - Pages use `dvh` height units.
+- [x] **Expense form.**
+  - The amount field opens the decimal keypad and accepts "1,250" and Arabic digits (١٢٣).
+  - The keyboard no longer pops up on phones when the form opens.
+  - Clear error messages: "Enter an amount", "Enter a number…", "The amount must be more than 0".
+  - The sub-budget can be set back to "None".
+  - Every label is linked to its field.
+  - Escape closes the form, asking first if there are unsaved changes.
+  - Screen readers announce it as a dialog.
+- [x] **No more browser popups.** Every `confirm()`/`alert()` is replaced with the in-app dialog or an inline message: trip, expense, sub-budget, category and sign-out.
+- [x] **Navigation.**
+  - Nav items have labels (visible from tablet width up, spoken by screen readers everywhere).
+  - A new **Account** menu has your email, the theme setting and **Sign out**, which asks for confirmation.
+  - The Budget card shows a › arrow and "Sub-budgets".
+  - The button nested inside a link is fixed.
+- [x] **One money format** (`src/lib/format.js`): "EGP 1,250" or "EGP 1,250.50" everywhere, including cards, the list, chart, PDF and sub-budgets. Dates are read as local dates, not UTC.
+- [x] **Stat cards fit small phones.** Smaller text and padding on phones. "Remaining" changes to "Over budget" when you've overspent.
+- [x] **PDF with Arabic.** When a trip has Arabic text, IBM Plex Sans Arabic (in `public/fonts`) is embedded, so Arabic prints correctly. Checked visually.
+- [x] **Dark mode.**
+  - Light / Dark / System setting in the Account menu, remembered on the device.
+  - The app's colours flip automatically in dark mode (`src/index.css` and `tailwind.config.js`).
+  - The status-bar colour follows the theme.
+  - The receipt scanner keeps its own dark look.
+- [x] **Consistent wording.**
+  - "Spent" and "Remaining" everywhere.
+  - "Unallocated" or "Over-allocated" on the sub-budget page.
+  - Trip status badges: "On track", "Nearly spent", "Over budget".
+- [x] **Performance.**
+  - Pages, the chart and the PDF library load only when needed.
+  - The Dashboard fetches just `trip_id` and `cost` for its totals.
+  - Deleting an expense removes it from the list instantly.
+  - Receipt images load lazily.
+- [x] **Cleanup.**
+  - Removed unused pages and components: `Home.jsx`, `TripExport.jsx`, `UserNotRegisteredError.jsx`, the no-op stubs, and 33 unused ui components.
+  - Removed 37 unused packages.
+  - Removed the leftover setup scripts.
+- [x] **Filters.**
+  - Remembered per trip on this device.
+  - There's a "3 of 10 expenses · Filtered total EGP …" line, or "N expenses · Total" when nothing is filtered.
+- [x] **Smaller fixes.**
+  - Editing a sub-budget can't exceed the trip budget; the dialog shows the maximum.
+  - Sub-budget pages refresh after you save or delete an expense.
+  - Editing a trip no longer rewrites its owner.
+  - Clearer loading and error screens for trips.
 
 ## 💡 Feature ideas (waiting for your go-ahead)
 

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/api/supabaseClient";
-import { useAuth } from "@/lib/AuthContext";
 import {
   ArrowLeft,
   Wallet,
@@ -22,16 +21,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { format } from "date-fns";
+import { formatMoney, formatDate } from "@/lib/format";
+import { toast } from "@/components/ui/use-toast";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 export default function TripBudget() {
   const [searchParams] = useSearchParams();
   const id = searchParams.get("id");
-  const { user } = useAuth();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState(null);
   const [selectedBudget, setSelectedBudget] = useState(null);
+  const [confirm, setConfirm] = useState(null);
+  const [formError, setFormError] = useState("");
   const queryClient = useQueryClient();
 
   // Fetch Trip
@@ -71,10 +73,15 @@ export default function TripBudget() {
       if (allExpensesError) throw allExpensesError;
 
       // Calculate total spent from all expenses
-      const totalSpent = allExpenses.reduce((acc, exp) => acc + (exp.cost || 0), 0);
+      const totalSpent = allExpenses.reduce(
+        (acc, exp) => acc + (exp.cost || 0),
+        0,
+      );
 
       // Get expenses with trip_budget_id for per-budget calculation
-      const expensesWithBudget = allExpenses.filter(exp => exp.trip_budget_id);
+      const expensesWithBudget = allExpenses.filter(
+        (exp) => exp.trip_budget_id,
+      );
       const spentByBudget = {};
       expensesWithBudget.forEach((exp) => {
         if (exp.trip_budget_id) {
@@ -125,11 +132,9 @@ export default function TripBudget() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tripBudgets", id] });
       setIsAddOpen(false);
+      toast({ title: "Sub-budget added" });
     },
-    onError: (error) => {
-      console.error("Create budget failed:", error.message);
-      alert(`Failed to create budget: ${error.message}`);
-    },
+    onError: (error) => setFormError(`Couldn't add it: ${error.message}`),
   });
 
   // Update budget mutation
@@ -148,7 +153,9 @@ export default function TripBudget() {
       queryClient.invalidateQueries({ queryKey: ["tripBudgets", id] });
       setIsEditOpen(false);
       setEditingBudget(null);
+      toast({ title: "Sub-budget updated" });
     },
+    onError: (error) => setFormError(`Couldn't save it: ${error.message}`),
   });
 
   // Delete budget mutation
@@ -162,65 +169,112 @@ export default function TripBudget() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tripBudgets", id] });
+      // Its expenses lose the link (ON DELETE SET NULL), so refresh them too
+      queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      toast({ title: "Sub-budget deleted" });
     },
+    onError: (error) =>
+      toast({
+        variant: "destructive",
+        title: "Couldn't delete the sub-budget",
+        description: error.message,
+      }),
   });
-
-  const handleUpdateBudget = (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    updateBudgetMutation.mutate(Object.fromEntries(formData));
-  };
 
   // Calculations
   const totalBudget = trip?.received_amount || 0;
-  const totalSubBudgets = budgets?.budgets?.reduce((acc, b) => acc + (b.amount || 0), 0) || 0;
+  const totalSubBudgets =
+    budgets?.budgets?.reduce((acc, b) => acc + (b.amount || 0), 0) || 0;
   const remainingForSubBudgets = totalBudget - totalSubBudgets;
   const totalSpent = budgets?.totalSpent || 0;
+
+  // Sub-budgets can't add up to more than the trip budget
+  const checkFits = (amount, available) => {
+    if (amount > available) {
+      setFormError(
+        `That's more than is left to allocate. The most you can set is ${formatMoney(Math.max(0, available))}.`,
+      );
+      return false;
+    }
+    setFormError("");
+    return true;
+  };
 
   const handleCreateBudget = (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    const newAmount = parseFloat(formData.get("amount"));
-    
-    if (newAmount > remainingForSubBudgets) {
-      alert(`Cannot add budget. Maximum available: EGP ${remainingForSubBudgets.toLocaleString()}`);
+    if (!checkFits(parseFloat(formData.get("amount")), remainingForSubBudgets))
       return;
-    }
-    
     createBudgetMutation.mutate(Object.fromEntries(formData));
+  };
+
+  const handleUpdateBudget = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    // Its own current amount is free to reuse
+    const available = remainingForSubBudgets + (editingBudget?.amount || 0);
+    if (!checkFits(parseFloat(formData.get("amount")), available)) return;
+    updateBudgetMutation.mutate(Object.fromEntries(formData));
+  };
+
+  const openAdd = (open) => {
+    setFormError("");
+    setIsAddOpen(open);
   };
 
   if (tripLoading || budgetsLoading)
     return (
-      <div className="p-8 text-center animate-pulse">Loading budgets...</div>
+      <div className="space-y-6" role="status" aria-label="Loading sub-budgets">
+        <div className="h-8 w-2/3 rounded-lg bg-gray-200 animate-pulse" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className="h-20 rounded-2xl bg-gray-100 animate-pulse"
+            />
+          ))}
+        </div>
+      </div>
     );
-  if (!trip) return <div className="p-8 text-center text-red-500">Trip not found</div>;
+  if (!trip)
+    return (
+      <div className="py-12 text-center">
+        <h2 className="text-lg font-medium text-slate-900">Trip not found</h2>
+        <Button asChild variant="outline" className="mt-4">
+          <Link to="/">Back to trips</Link>
+        </Button>
+      </div>
+    );
 
   return (
-    <div className="min-h-[calc(100vh-100px)]">
+    <div>
       {/* Header */}
       <div className="mb-6">
         <Link
           to={`/TripDetails?id=${id}`}
-          className="inline-flex items-center text-slate-500 hover:text-slate-900 mb-4 transition-colors"
+          className="-ml-2 mb-2 inline-flex h-10 items-center rounded-lg px-2 text-slate-500 transition-colors hover:text-slate-900"
         >
           <ArrowLeft className="w-4 h-4 mr-1" /> Back to Trip
         </Link>
 
-        <div className="flex justify-between items-start">
-          <div>
-            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Trip Budgets</p>
-            <h1 className="text-3xl font-bold text-slate-900">{trip.name}</h1>
+        <div className="flex justify-between items-start gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">
+              Sub-budgets
+            </p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 break-words">
+              {trip.name}
+            </h1>
           </div>
-          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+          <Dialog open={isAddOpen} onOpenChange={openAdd}>
             <DialogTrigger asChild>
-              <Button className="gap-2 bg-indigo-600">
-                <Plus className="w-4 h-4" /> Add Budget
+              <Button className="shrink-0 gap-2 bg-indigo-600 text-white hover:bg-indigo-700">
+                <Plus className="w-4 h-4" /> Add
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add Sub-Budget</DialogTitle>
+                <DialogTitle>Add sub-budget</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleCreateBudget} className="space-y-4 mt-4">
                 <div className="space-y-2">
@@ -238,21 +292,38 @@ export default function TripBudget() {
                     id="amount"
                     name="amount"
                     type="number"
+                    inputMode="decimal"
+                    min="0"
                     step="0.01"
                     placeholder="0.00"
                     required
                   />
+                  <p className="text-xs text-slate-500">
+                    Left to allocate:{" "}
+                    {formatMoney(Math.max(0, remainingForSubBudgets))}
+                  </p>
                 </div>
+                {formError && (
+                  <p role="alert" className="text-sm text-red-600">
+                    {formError}
+                  </p>
+                )}
                 <div className="pt-4 flex justify-end gap-2">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setIsAddOpen(false)}
+                    onClick={() => openAdd(false)}
                   >
                     Cancel
                   </Button>
-                  <Button type="submit" className="bg-indigo-600">
-                    Create
+                  <Button
+                    type="submit"
+                    className="bg-indigo-600 text-white hover:bg-indigo-700"
+                    disabled={createBudgetMutation.isPending}
+                  >
+                    {createBudgetMutation.isPending
+                      ? "Adding..."
+                      : "Add sub-budget"}
                   </Button>
                 </div>
               </form>
@@ -262,108 +333,123 @@ export default function TripBudget() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
-          <div className="flex items-center gap-2 mb-1 text-indigo-600">
-            <Wallet className="w-4 h-4" />
-            <span className="text-xs font-bold uppercase tracking-wider">
-              Total Budget
-            </span>
-          </div>
-          <p className="text-lg font-bold text-indigo-900">
-            EGP {totalBudget.toLocaleString()}
-          </p>
-        </div>
-
-        <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
-          <div className="flex items-center gap-2 mb-1 text-blue-600">
-            <Wallet className="w-4 h-4" />
-            <span className="text-xs font-bold uppercase tracking-wider">
-              Allocated
-            </span>
-          </div>
-          <p className="text-lg font-bold text-blue-900">
-            EGP {totalSubBudgets.toLocaleString()}
-          </p>
-        </div>
-
-        <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
-          <div className="flex items-center gap-2 mb-1 text-amber-600">
-            <TrendingDown className="w-4 h-4" />
-            <span className="text-xs font-bold uppercase tracking-wider">
-              Used
-            </span>
-          </div>
-          <p className="text-lg font-bold text-amber-900">
-            EGP {totalSpent.toLocaleString()}
-          </p>
-        </div>
-
-        <div
-          className={`${remainingForSubBudgets < 0 ? "bg-red-50 border-red-100" : "bg-emerald-50 border-emerald-100"} p-4 rounded-2xl border`}
-        >
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mb-6">
+        {[
+          {
+            label: "Trip budget",
+            value: totalBudget,
+            icon: Wallet,
+            tone: "indigo",
+          },
+          {
+            label: "Allocated",
+            value: totalSubBudgets,
+            icon: Wallet,
+            tone: "blue",
+          },
+          {
+            label: "Spent",
+            value: totalSpent,
+            icon: TrendingDown,
+            tone: "amber",
+          },
+          remainingForSubBudgets < 0
+            ? {
+                label: "Over-allocated",
+                value: -remainingForSubBudgets,
+                icon: Wallet,
+                tone: "red",
+              }
+            : {
+                label: "Unallocated",
+                value: remainingForSubBudgets,
+                icon: Wallet,
+                tone: "emerald",
+              },
+        ].map(({ label, value, icon: Icon, tone }) => (
           <div
-            className={`flex items-center gap-2 mb-1 ${remainingForSubBudgets < 0 ? "text-red-600" : "text-emerald-600"}`}
+            key={label}
+            className={`min-w-0 p-3 sm:p-4 rounded-2xl border ${TONES[tone].card}`}
           >
-            <Wallet className="w-4 h-4" />
-            <span className="text-xs font-bold uppercase tracking-wider">
-              Available
-            </span>
+            <div
+              className={`flex items-center gap-1.5 mb-1 ${TONES[tone].label}`}
+            >
+              <Icon className="w-4 h-4 shrink-0" />
+              <span className="text-[11px] sm:text-xs font-bold uppercase sm:tracking-wider">
+                {label}
+              </span>
+            </div>
+            <p
+              className={`text-base sm:text-lg font-bold leading-tight ${TONES[tone].value}`}
+            >
+              {formatMoney(value)}
+            </p>
           </div>
-          <p
-            className={`text-lg font-bold ${remainingForSubBudgets < 0 ? "text-red-900" : "text-emerald-900"}`}
-          >
-            EGP {remainingForSubBudgets.toLocaleString()}
-          </p>
-        </div>
+        ))}
       </div>
 
       {/* Budgets List */}
       <div className="space-y-3">
         {budgets?.budgets?.length === 0 ? (
-          <div className="text-center py-8 text-gray-400">
-            No budgets yet. Click "Add Budget" to create one.
+          <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+            <p className="text-slate-700 font-medium">No sub-budgets yet</p>
+            <p className="text-slate-500 text-sm mt-1">
+              Split the trip budget into parts like Food or Hotels with the Add
+              button.
+            </p>
           </div>
         ) : (
           budgets?.budgets?.map((budget) => {
             const percent =
-              budget.amount > 0
-                ? (budget.spent / budget.amount) * 100
-                : 0;
+              budget.amount > 0 ? (budget.spent / budget.amount) * 100 : 0;
             const isOverBudget = budget.spent > budget.amount;
 
             return (
               <div
                 key={budget.id}
-                className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm"
+                className="bg-card p-4 rounded-xl border border-gray-100 shadow-sm"
               >
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <h3 className="font-medium text-gray-900">{budget.name}</h3>
+                <div className="flex justify-between items-start gap-2 mb-3">
+                  <div className="min-w-0">
+                    <h3 className="font-medium text-gray-900 break-words">
+                      {budget.name}
+                    </h3>
                     <p className="text-sm text-gray-500">
-                      Allocated: EGP {budget.amount?.toLocaleString()}
+                      Allocated: {formatMoney(budget.amount)}
                     </p>
                   </div>
-                  <div className="flex gap-2">
-                    <button
+                  <div className="-mr-2 -mt-2 flex shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Edit ${budget.name}`}
                       onClick={() => {
+                        setFormError("");
                         setEditingBudget(budget);
                         setIsEditOpen(true);
                       }}
-                      className="p-1 text-gray-400 hover:text-indigo-600"
+                      className="text-gray-400 hover:text-indigo-600"
                     >
                       <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (confirm("Are you sure you want to delete this budget?")) {
-                          deleteBudgetMutation.mutate(budget.id);
-                        }
-                      }}
-                      className="p-1 text-gray-400 hover:text-red-600"
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Delete ${budget.name}`}
+                      onClick={() =>
+                        setConfirm({
+                          title: `Delete "${budget.name}"?`,
+                          description:
+                            "Its expenses stay on the trip; they just won't belong to a sub-budget any more.",
+                          confirmLabel: "Delete sub-budget",
+                          onConfirm: () =>
+                            deleteBudgetMutation.mutate(budget.id),
+                        })
+                      }
+                      className="text-gray-400 hover:text-red-600"
                     >
                       <Trash2 className="w-4 h-4" />
-                    </button>
+                    </Button>
                   </div>
                 </div>
 
@@ -372,16 +458,22 @@ export default function TripBudget() {
                     {budget.spent > 0 ? (
                       <button
                         onClick={() => setSelectedBudget(budget)}
-                        className="text-amber-600 hover:text-amber-800 font-medium"
+                        className="-mx-1.5 -my-2 rounded-md px-1.5 py-2 text-amber-600 hover:text-amber-800 font-medium underline decoration-dotted underline-offset-4"
                       >
-                        Used: EGP {budget.spent?.toLocaleString()}
+                        Spent: {formatMoney(budget.spent)}
                       </button>
                     ) : (
-                      <span className="text-gray-400">Used: EGP 0</span>
+                      <span className="text-gray-400">
+                        Spent: {formatMoney(0)}
+                      </span>
                     )}
                   </div>
-                  <div className={`text-sm font-medium ${isOverBudget ? "text-red-600" : "text-emerald-600"}`}>
-                    Remaining: EGP {budget.remaining?.toLocaleString()}
+                  <div
+                    className={`text-sm font-medium ${isOverBudget ? "text-red-600" : "text-emerald-600"}`}
+                  >
+                    {isOverBudget
+                      ? `${formatMoney(-budget.remaining)} over`
+                      : `${formatMoney(budget.remaining)} remaining`}
                   </div>
                 </div>
 
@@ -397,7 +489,7 @@ export default function TripBudget() {
                   }
                 />
                 <div className="text-xs text-gray-400 mt-1 text-right">
-                  {percent.toFixed(0)}%
+                  {percent.toFixed(0)}% spent
                 </div>
               </div>
             );
@@ -409,7 +501,7 @@ export default function TripBudget() {
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Budget</DialogTitle>
+            <DialogTitle>Edit sub-budget</DialogTitle>
           </DialogHeader>
           {editingBudget && (
             <form onSubmit={handleUpdateBudget} className="space-y-4 mt-4">
@@ -428,11 +520,27 @@ export default function TripBudget() {
                   id="edit-amount"
                   name="amount"
                   type="number"
+                  inputMode="decimal"
+                  min="0"
                   step="0.01"
                   defaultValue={editingBudget.amount}
                   required
                 />
+                <p className="text-xs text-slate-500">
+                  Most you can set:{" "}
+                  {formatMoney(
+                    Math.max(
+                      0,
+                      remainingForSubBudgets + (editingBudget.amount || 0),
+                    ),
+                  )}
+                </p>
               </div>
+              {formError && (
+                <p role="alert" className="text-sm text-red-600">
+                  {formError}
+                </p>
+              )}
               <div className="pt-4 flex justify-end gap-2">
                 <Button
                   type="button"
@@ -444,8 +552,14 @@ export default function TripBudget() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-indigo-600">
-                  Save Changes
+                <Button
+                  type="submit"
+                  className="bg-indigo-600 text-white hover:bg-indigo-700"
+                  disabled={updateBudgetMutation.isPending}
+                >
+                  {updateBudgetMutation.isPending
+                    ? "Saving..."
+                    : "Save changes"}
                 </Button>
               </div>
             </form>
@@ -453,13 +567,16 @@ export default function TripBudget() {
         </DialogContent>
       </Dialog>
 
+      <ConfirmDialog confirm={confirm} onClose={() => setConfirm(null)} />
+
       {/* Budget Expenses Dialog */}
-      <Dialog open={!!selectedBudget} onOpenChange={() => setSelectedBudget(null)}>
+      <Dialog
+        open={!!selectedBudget}
+        onOpenChange={() => setSelectedBudget(null)}
+      >
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {selectedBudget?.name} - Expenses
-            </DialogTitle>
+            <DialogTitle>{selectedBudget?.name}: expenses</DialogTitle>
           </DialogHeader>
           {budgetExpensesLoading ? (
             <p className="text-center py-4">Loading...</p>
@@ -470,17 +587,19 @@ export default function TripBudget() {
               {budgetExpenses?.map((expense) => (
                 <div
                   key={expense.id}
-                  className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"
+                  className="flex justify-between items-center gap-3 p-3 bg-gray-50 rounded-lg"
                 >
-                  <div>
-                    <p className="font-medium text-gray-900">{expense.category}</p>
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900">
+                      {expense.category}
+                    </p>
                     <p className="text-xs text-gray-500">
-                      {expense.date ? format(new Date(expense.date), "MMM d, yyyy") : "No date"}
+                      {expense.date ? formatDate(expense.date) : "No date"}
                       {expense.notes && ` - ${expense.notes.slice(0, 30)}`}
                     </p>
                   </div>
-                  <p className="font-medium text-amber-600">
-                    EGP {expense.cost?.toLocaleString()}
+                  <p className="font-medium text-amber-600 whitespace-nowrap">
+                    {formatMoney(expense.cost)}
                   </p>
                 </div>
               ))}
@@ -491,3 +610,32 @@ export default function TripBudget() {
     </div>
   );
 }
+
+// Tailwind needs whole class names in the source, so each tone's classes are spelled out
+const TONES = {
+  indigo: {
+    card: "bg-indigo-50 border-indigo-100",
+    label: "text-indigo-600",
+    value: "text-indigo-900",
+  },
+  blue: {
+    card: "bg-blue-50 border-blue-100",
+    label: "text-blue-600",
+    value: "text-blue-900",
+  },
+  amber: {
+    card: "bg-amber-50 border-amber-100",
+    label: "text-amber-600",
+    value: "text-amber-900",
+  },
+  emerald: {
+    card: "bg-emerald-50 border-emerald-100",
+    label: "text-emerald-600",
+    value: "text-emerald-900",
+  },
+  red: {
+    card: "bg-red-50 border-red-100",
+    label: "text-red-600",
+    value: "text-red-900",
+  },
+};

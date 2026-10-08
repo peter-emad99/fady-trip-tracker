@@ -13,6 +13,7 @@ import { uploadReceipt, deleteReceipt, organizeReceipts, isDriveReceipt } from '
 import { toast } from '@/components/ui/use-toast';
 import { loadOpenCV } from '@/lib/docScanner';
 import { format } from 'date-fns';
+import { formatMoney, parseAmount } from '@/lib/format';
 import ConfirmDialog from '@/components/ConfirmDialog';
 
 const ReceiptReview = React.lazy(() => import('./ReceiptReview'));
@@ -175,11 +176,24 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       else onClose();
       };
 
+      // Escape closes the form, unless a menu, the photo review or the discard prompt is handling it
+      const requestCloseRef = React.useRef(requestClose);
+      requestCloseRef.current = requestClose;
+      React.useEffect(() => {
+        const onKeyDown = (e) => {
+          if (e.key !== 'Escape' || e.defaultPrevented || review || confirmDiscard) return;
+          if (document.querySelector('[data-radix-popper-content-wrapper]')) return;
+          requestCloseRef.current();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+      }, [review, confirmDiscard]);
+
   const onSubmit = async (data) => {
     try {
       const cleanData = {
           ...data,
-          cost: parseFloat(data.cost),
+          cost: parseAmount(data.cost),
           receipt_url: data.receipt_urls?.[0] || null,
           user_id: user.id,
           trip_budget_id: data.trip_budget_id || null
@@ -228,10 +242,13 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: '100%' }}
       transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-      className="fixed inset-0 z-50 bg-white md:m-auto md:h-[80vh] md:w-[500px] md:rounded-2xl md:shadow-2xl flex flex-col"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="expense-form-title"
+      className="fixed inset-0 z-50 bg-card md:m-auto md:h-[80vh] md:w-[500px] md:rounded-2xl md:shadow-2xl flex flex-col"
     >
-      <div className="flex items-center justify-between p-4 border-b border-gray-100">
-        <h2 className="text-lg font-bold">{expenseToEdit ? 'Edit Expense' : 'Add New Expense'}</h2>
+      <div className="flex items-center justify-between p-4 pt-[max(1rem,env(safe-area-inset-top))] md:pt-4 border-b border-gray-100">
+        <h2 id="expense-form-title" className="text-lg font-bold">{expenseToEdit ? 'Edit Expense' : 'Add New Expense'}</h2>
         <Button variant="ghost" size="icon" onClick={requestClose} aria-label="Close" className="rounded-full hover:bg-gray-100">
           <X className="w-5 h-5" />
         </Button>
@@ -242,30 +259,44 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
           
           {/* Amount Input */}
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Amount (EGP)</Label>
+            <Label htmlFor="expense-cost" className="text-xs font-medium text-slate-500 uppercase tracking-wider">Amount (EGP)</Label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xl font-bold text-slate-300">EGP</span>
+              {/* Text + decimal keypad: type="number" shows the wrong keyboard on iPhone and rejects "1,250" */}
               <Input
-                type="number"
-                step="0.01"
+                id="expense-cost"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
                 placeholder="0.00"
+                aria-invalid={!!errors.cost}
+                aria-describedby={errors.cost ? 'expense-cost-error' : undefined}
                 className="pl-16 h-16 text-3xl font-bold border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 rounded-xl"
-                {...register('cost', { required: true, min: 0.01 })}
-                autoFocus
+                {...register('cost', {
+                  validate: (value) => {
+                    const amount = parseAmount(value);
+                    if (String(value ?? '').trim() === '') return 'Enter an amount';
+                    if (Number.isNaN(amount)) return 'Enter a number, like 150 or 99.50';
+                    return amount > 0 || 'The amount must be more than 0';
+                  },
+                })}
+                // Opening the keyboard straight away would cover the form on phones
+                autoFocus={!expenseToEdit && window.matchMedia?.('(pointer: fine)').matches}
               />
             </div>
-            {errors.cost && <p className="text-red-500 text-xs">Amount is required</p>}
+            {errors.cost && <p id="expense-cost-error" className="text-red-500 text-xs">{errors.cost.message}</p>}
           </div>
 
           {/* Category Selection */}
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Category</Label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <p id="expense-category-label" className="text-xs font-medium text-slate-500 uppercase tracking-wider">Category</p>
+            <div role="radiogroup" aria-labelledby="expense-category-label" className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {categories?.map((cat) => (
                 <label
                   key={cat.id}
                   className={`
                     flex flex-col items-center justify-center p-3 rounded-xl border cursor-pointer transition-all
+                    has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-indigo-400
                     ${watch('category') === cat.name 
                       ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
                       : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50 text-slate-600'}
@@ -283,7 +314,7 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
               ))}
               {categories?.length === 0 && (
                 <p className="col-span-full text-center text-xs text-slate-500 py-4 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                  No categories found. Please add some in the Dashboard.
+                  No categories yet. Add some from Categories on the trips page.
                 </p>
               )}
             </div>
@@ -292,10 +323,11 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
           {/* Date & Budget */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Date</Label>
+              <Label htmlFor="expense-date" className="text-xs font-medium text-slate-500 uppercase tracking-wider">Date</Label>
               <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Calendar className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <Input 
+                  id="expense-date"
                   type="date" 
                   className="pl-9"
                   {...register('date', { required: true })} 
@@ -303,18 +335,21 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Budget</Label>
+              <Label htmlFor="expense-budget" className="text-xs font-medium text-slate-500 uppercase tracking-wider">Sub-budget</Label>
+              {/* Radix Select can't hold an empty value, so "none" stands in for no sub-budget */}
               <Select
-                value={watch('trip_budget_id')}
-                onValueChange={(value) => setValue('trip_budget_id', value)}
+                value={watch('trip_budget_id') || 'none'}
+                onValueChange={(value) => setValue('trip_budget_id', value === 'none' ? '' : value, { shouldDirty: true })}
+                disabled={!budgets.length && !watch('trip_budget_id')}
               >
-                <SelectTrigger className="h-10">
-                  <SelectValue placeholder="Select budget (optional)" />
+                <SelectTrigger id="expense-budget" className="h-10">
+                  <SelectValue placeholder="None" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">{budgets.length ? 'None' : 'No sub-budgets yet'}</SelectItem>
                   {budgets.map((budget) => (
                     <SelectItem key={budget.id} value={budget.id}>
-                      {budget.name} - EGP {budget.amount?.toLocaleString()}
+                      {budget.name} · {formatMoney(budget.amount)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -324,10 +359,11 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
 
           {/* Assigned To */}
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Assigned To</Label>
+            <Label htmlFor="expense-assigned" className="text-xs font-medium text-slate-500 uppercase tracking-wider">Assigned To</Label>
             <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <User className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input 
+                id="expense-assigned"
                 placeholder="Me" 
                 className="pl-9"
                 {...register('assigned_to')} 
@@ -337,8 +373,9 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
 
           {/* Notes */}
           <div className="space-y-2">
-            <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Notes</Label>
+            <Label htmlFor="expense-notes" className="text-xs font-medium text-slate-500 uppercase tracking-wider">Notes</Label>
             <Textarea 
+              id="expense-notes"
               placeholder="What was this for?" 
               className="resize-none"
               rows={3}
@@ -349,7 +386,7 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
           {/* Receipt Upload */}
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Receipts</Label>
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Receipts</p>
               {receiptUrls.length + pending.length > 0 && (
                 <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-600">
                   {receiptUrls.length + pending.length}
@@ -402,7 +439,7 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
                       type="button"
                       aria-label={`Remove receipt ${index + 1}`}
                       onClick={() => removeReceipt(index)}
-                      className="absolute top-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-red-500"
+                      className="absolute top-1 right-1 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-red-500"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -440,11 +477,11 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
         </form>
       </div>
 
-      <div className="p-4 border-t border-gray-100 bg-gray-50/50">
+      <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-gray-100 bg-gray-50/50">
         <Button 
           type="submit" 
           form="expense-form" 
-          className="w-full h-12 text-lg font-semibold bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200"
+          className="w-full h-12 text-lg font-semibold bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200 dark:shadow-none"
           disabled={isSubmitting || uploading}
         >
           {isSubmitting ? 'Saving...' : 'Save Expense'}

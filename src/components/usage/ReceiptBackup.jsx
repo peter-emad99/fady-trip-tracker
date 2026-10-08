@@ -22,7 +22,7 @@ export default function ReceiptBackup() {
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm space-y-4">
+    <div className="bg-card rounded-2xl border border-gray-100 p-5 shadow-sm space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="bg-indigo-50 p-2 rounded-xl shrink-0">

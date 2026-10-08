@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/use-toast';
+import ConfirmDialog from '@/components/ConfirmDialog';
 
 const showError = (title) => (error) => toast({ variant: 'destructive', title, description: error.message });
 
@@ -16,6 +17,7 @@ export default function CategoryManager() {
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [name, setName] = useState('');
+  const [confirm, setConfirm] = useState(null);
 
   const { data: categories, isLoading } = useQuery({
     queryKey: ['categories'],
@@ -100,7 +102,7 @@ export default function CategoryManager() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="rounded-full">
+        <Button variant="outline" className="rounded-full">
           <Settings2 className="w-4 h-4 mr-2" />
           Categories
         </Button>
@@ -112,12 +114,13 @@ export default function CategoryManager() {
         
         <form onSubmit={handleSubmit} className="flex gap-2 mt-4">
           <Input 
+            aria-label="New category name"
             placeholder="New category name..." 
             value={editingId ? '' : name} 
             onChange={(e) => !editingId && setName(e.target.value)}
             disabled={!!editingId}
           />
-          <Button type="submit" size="icon" disabled={createMutation.isPending || !!editingId}>
+          <Button type="submit" size="icon" aria-label="Add category" disabled={createMutation.isPending || !!editingId}>
             <Plus className="w-4 h-4" />
           </Button>
         </form>
@@ -132,15 +135,21 @@ export default function CategoryManager() {
                   <div className="flex items-center gap-2 flex-1 mr-2">
                     <Input 
                       autoFocus
-                      size="sm"
+                      aria-label="Category name"
                       value={name} 
                       onChange={(e) => setName(e.target.value)}
-                      className="h-8"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && name.trim()) {
+                          e.preventDefault();
+                          updateMutation.mutate({ id: cat.id, oldName: cat.name, newName: name.trim() });
+                        }
+                      }}
                     />
                     <Button 
                       size="icon" 
                       variant="ghost" 
-                      className="h-8 w-8 text-green-600"
+                      aria-label="Save name"
+                      className="shrink-0 text-green-600"
                       disabled={!name.trim() || updateMutation.isPending}
                       onClick={() => updateMutation.mutate({ id: cat.id, oldName: cat.name, newName: name.trim() })}
                     >
@@ -149,7 +158,8 @@ export default function CategoryManager() {
                     <Button 
                       size="icon" 
                       variant="ghost" 
-                      className="h-8 w-8 text-slate-400"
+                      aria-label="Cancel rename"
+                      className="shrink-0 text-slate-400"
                       onClick={() => { setEditingId(null); setName(''); }}
                     >
                       <X className="w-4 h-4" />
@@ -171,7 +181,8 @@ export default function CategoryManager() {
                           <Button 
                             size="icon" 
                             variant="ghost" 
-                            className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                            aria-label={`Rename ${cat.name}`}
+                            className="text-slate-400 hover:text-indigo-600"
                             onClick={() => startEdit(cat)}
                           >
                             <Pencil className="w-3.5 h-3.5" />
@@ -179,12 +190,16 @@ export default function CategoryManager() {
                           <Button 
                             size="icon" 
                             variant="ghost" 
-                            className="h-8 w-8 text-slate-400 hover:text-red-600"
-                            onClick={() => {
-                              if(confirm('Are you sure? Expenses with this category will remain, but the category itself will be gone.')) {
-                                deleteMutation.mutate(cat.id);
-                              }
-                            }}
+                            aria-label={`Delete ${cat.name}`}
+                            className="text-slate-400 hover:text-red-600"
+                            onClick={() =>
+                              setConfirm({
+                                title: `Delete "${cat.name}"?`,
+                                description: 'Expenses in this category keep it, but you won\'t be able to pick it for new ones.',
+                                confirmLabel: 'Delete category',
+                                onConfirm: () => deleteMutation.mutate(cat.id),
+                              })
+                            }
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
@@ -203,6 +218,7 @@ export default function CategoryManager() {
           )}
         </div>
       </DialogContent>
+      <ConfirmDialog confirm={confirm} onClose={() => setConfirm(null)} />
     </Dialog>
   );
 }

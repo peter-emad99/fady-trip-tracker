@@ -1,3 +1,13 @@
+// These palettes read CSS variables (src/index.css) so dark mode can flip them
+const PALETTES = ['slate', 'gray', 'indigo', 'red', 'amber', 'emerald', 'blue', 'orange', 'green'];
+const STEPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
+const themedPalettes = Object.fromEntries(
+  PALETTES.map((name) => [
+    name,
+    Object.fromEntries(STEPS.map((step) => [step, `rgb(var(--c-${name}-${step}) / <alpha-value>)`])),
+  ]),
+);
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
     darkMode: ["class"],
@@ -10,6 +20,7 @@ module.exports = {
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		colors: {
+  			...themedPalettes,
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {
