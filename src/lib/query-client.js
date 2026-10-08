@@ -23,10 +23,12 @@ export const PERSIST_KEY = 'trippy.queryCache';
 export const persistOptions = {
     persister: createSyncStoragePersister({ storage: window.localStorage, key: PERSIST_KEY }),
     maxAge: WEEK,
-    buster: 'v1',
+    buster: 'v2',
     // Keep anything that has data, even if its latest refresh failed (e.g. offline), so the saved
-    // copy isn't wiped by a failed reload
-    dehydrateOptions: { shouldDehydrateQuery: (query) => query.state.data !== undefined },
+    // copy isn't wiped by a failed reload. Admin usage stats are live-only and not worth keeping.
+    dehydrateOptions: {
+        shouldDehydrateQuery: (query) => query.state.data !== undefined && query.queryKey[0] !== 'usage',
+    },
 };
 
 // Signing out removes the saved copy, so the next person on this device can't read it

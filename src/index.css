@@ -288,5 +288,12 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Phone-app feel: no grey flash on tap, no rubber-band pull on the whole page */
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+  /* Taps respond immediately (no double-tap-to-zoom delay on buttons and links) */
+  a, button, [role="button"], input, select, textarea, label {
+    touch-action: manipulation;
   }
 }

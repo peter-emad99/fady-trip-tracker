@@ -16,6 +16,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import ReceiptImage from "./ReceiptImage";
+import { categoryTone } from "@/lib/categoryColor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -248,68 +249,55 @@ export default function ExpenseList({
 
   return (
     <div className="space-y-4">
-      <Collapsible
-        open={isFiltersOpen}
-        onOpenChange={setIsFiltersOpen}
-        className="bg-card rounded-2xl border border-gray-100 shadow-sm"
-      >
-        <div className="p-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <Input
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search by category, notes, assignee, amount, or date"
-                className="pl-9 bg-gray-50 border-gray-200"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 lg:shrink-0">
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="gap-2"
-                  aria-expanded={isFiltersOpen}
-                >
-                  <SlidersHorizontal className="w-4 h-4" />
-                  Filters
-                  {activeFilterCount > 0 && (
-                    <span className="inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-indigo-100 px-1.5 text-xs font-semibold text-indigo-700">
-                      {activeFilterCount}
-                    </span>
-                  )}
-                  <ChevronDown
-                    className={`w-4 h-4 transition-transform ${isFiltersOpen ? "rotate-180" : ""}`}
-                  />
-                </Button>
-              </CollapsibleTrigger>
-
-              {onAdd && (
-                <Button
-                  className="hidden md:inline-flex gap-2 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:text-white dark:hover:bg-indigo-700"
-                  onClick={onAdd}
-                >
-                  <Plus className="w-4 h-4" />
-                  Add
-                </Button>
-              )}
-
-              {(searchTerm || activeFilterCount > 0) && (
-                <Button
-                  variant="ghost"
-                  className="gap-2 text-slate-500 hover:text-slate-900"
-                  onClick={resetFilters}
-                >
-                  <X className="w-4 h-4" />
-                  Clear
-                </Button>
-              )}
-            </div>
+      <Collapsible open={isFiltersOpen} onOpenChange={setIsFiltersOpen}>
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Input
+              type="search"
+              enterKeyHint="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search expenses"
+              aria-label="Search by category, notes, person, amount or date"
+              className="pl-9 bg-card border-gray-200"
+            />
           </div>
 
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="outline"
+              className="relative shrink-0 gap-2 px-3 bg-card"
+              aria-expanded={isFiltersOpen}
+              aria-label={`Filters${activeFilterCount ? ` (${activeFilterCount} on)` : ""}`}
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              <span className="hidden sm:inline">Filters</span>
+              {activeFilterCount > 0 && (
+                <span className="inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-indigo-600 px-1.5 text-xs font-semibold text-white">
+                  {activeFilterCount}
+                </span>
+              )}
+              <ChevronDown
+                className={`hidden sm:block w-4 h-4 transition-transform ${isFiltersOpen ? "rotate-180" : ""}`}
+              />
+            </Button>
+          </CollapsibleTrigger>
+
+          {onAdd && (
+            <Button
+              className="hidden md:inline-flex shrink-0 gap-2 bg-slate-900 hover:bg-slate-800 dark:bg-indigo-600 dark:text-white dark:hover:bg-indigo-700"
+              onClick={onAdd}
+            >
+              <Plus className="w-4 h-4" />
+              Add
+            </Button>
+          )}
+        </div>
+
+        <div>
           <CollapsibleContent className="pt-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 rounded-xl border border-gray-100 bg-gray-50/70 p-4">
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 rounded-xl border border-gray-100 bg-card p-3 sm:p-4">
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Category
@@ -448,16 +436,25 @@ export default function ExpenseList({
 
       {/* Count and total for what's shown, so filtering doubles as a quick sum */}
       <div
-        className="flex items-baseline justify-between px-1 text-sm"
+        className="flex items-center justify-between gap-2 px-1 text-sm"
         aria-live="polite"
       >
         <span className="text-slate-500">
           {isFiltered
-            ? `${filteredExpenses.length} of ${expenses.length} expenses`
+            ? `${filteredExpenses.length} of ${expenses.length}`
             : `${expenses.length} ${expenses.length === 1 ? "expense" : "expenses"}`}
+          {isFiltered && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="-my-2 ml-1 inline-flex items-center gap-1 rounded-md px-1.5 py-2 font-medium text-indigo-600 hover:text-indigo-700"
+            >
+              <X className="h-3.5 w-3.5" /> Clear
+            </button>
+          )}
         </span>
         <span className="font-semibold text-slate-900">
-          {isFiltered ? "Filtered total " : "Total "}
+          {isFiltered ? "Filtered " : "Total "}
           {formatMoney(filteredTotal)}
         </span>
       </div>
@@ -472,151 +469,190 @@ export default function ExpenseList({
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {filteredExpenses.map((expense) => (
-            <div
-              key={expense.id}
-              className="flex items-center justify-between p-4 bg-card rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all"
+        <div className="space-y-5">
+          {groupByDay(filteredExpenses).map(({ date, items, total }) => (
+            <section
+              key={date || "no-date"}
+              aria-label={formatDate(date, "EEEE, MMM d") || "No date"}
             >
-              <div className="flex items-center gap-4 flex-1 min-w-0 mr-2">
-                <div className="h-12 w-12 shrink-0 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-sm uppercase">
-                  {expense.category?.slice(0, 2)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <h4 className="font-bold text-slate-900 text-base truncate">
-                      {expense.category}
-                    </h4>
-                    {/* Saved on this device, not on the server yet */}
-                    {expense._pending && (
-                      <span
-                        className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                          expense._error
-                            ? "bg-red-100 text-red-700"
-                            : "bg-amber-100 text-amber-800"
-                        }`}
-                        title={
-                          expense._error || "Will upload when you're online"
-                        }
-                      >
-                        {expense._error ? (
-                          <AlertTriangle className="h-3 w-3" />
-                        ) : (
-                          <CloudUpload className="h-3 w-3" />
-                        )}
-                        {expense._error ? "Sync failed" : "Waiting to sync"}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-slate-600 mt-1">
-                    <span className="flex items-center gap-1 whitespace-nowrap">
-                      {formatDate(expense.date, "MMM d")}
-                    </span>
-
-                    {expense.assigned_to && (
-                      <>
-                        <span className="text-slate-300 hidden sm:inline">
-                          |
-                        </span>
-                        <span className="flex items-center gap-1 whitespace-nowrap">
-                          <User className="w-3 h-3" /> {expense.assigned_to}
-                        </span>
-                      </>
-                    )}
-
-                    {(expense.receipt_urls?.length > 0 ||
-                      expense.receipt_url) && (
-                      <>
-                        <span className="text-slate-300 hidden sm:inline">
-                          |
-                        </span>
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <button className="-mx-1.5 -my-2 flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-2 text-indigo-600 transition-colors hover:text-indigo-700">
-                              {expense.receipt_urls?.length > 1 ? (
-                                <Images className="w-3 h-3" />
-                              ) : (
-                                <ImageIcon className="w-3 h-3" />
-                              )}
-                              {expense.receipt_urls?.length > 1
-                                ? `${expense.receipt_urls.length} Receipts`
-                                : "Receipt"}
-                            </button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto bg-card p-6 rounded-xl">
-                            <DialogTitle className="sr-only">
-                              Receipts for {expense.category}
-                            </DialogTitle>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {(expense.receipt_urls?.length > 0
-                                ? expense.receipt_urls
-                                : [expense.receipt_url]
-                              ).map((url, idx) => (
-                                <div
-                                  key={idx}
-                                  className="rounded-lg overflow-hidden border border-gray-100 shadow-sm"
-                                >
-                                  <ReceiptImage
-                                    url={url}
-                                    alt={`Receipt ${idx + 1}`}
-                                    className="w-full h-auto min-h-24 object-contain"
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                      </>
-                    )}
-                  </div>
-
-                  {expense.notes && (
-                    <p className="text-xs text-slate-600 mt-1.5 line-clamp-2 leading-relaxed">
-                      {expense.notes}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-                <span className="font-bold text-slate-900 text-base sm:text-lg whitespace-nowrap">
-                  {formatMoney(expense.cost)}
+              {/* Day header stays in view while scrolling through that day */}
+              <div className="sticky top-[calc(4rem+env(safe-area-inset-top))] z-10 -mx-4 mb-2 flex items-baseline justify-between bg-gray-50/95 px-5 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 backdrop-blur sm:mx-0 sm:px-1">
+                <span>{date ? formatDate(date, "EEE, MMM d") : "No date"}</span>
+                <span className="normal-case tracking-normal">
+                  {formatMoney(total)}
                 </span>
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Actions for ${expense.category} expense`}
-                      className="h-10 w-10 text-gray-400 hover:text-gray-600"
-                    >
-                      <MoreHorizontal className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      className="py-2.5"
-                      onClick={() => onEdit(expense)}
-                    >
-                      <Pencil className="w-4 h-4 mr-2" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="py-2.5 text-red-600 focus:text-red-600"
-                      onClick={() => onDelete(expense.id)}
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
               </div>
-            </div>
+              <div className="space-y-2">
+                {items.map((expense) => (
+                  <ExpenseRow
+                    key={expense.id}
+                    expense={expense}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                  />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// Newest day first; each day's expenses keep the list's order
+function groupByDay(expenses) {
+  const groups = [];
+  for (const expense of expenses) {
+    const last = groups[groups.length - 1];
+    if (last && last.date === expense.date) {
+      last.items.push(expense);
+      last.total += Number(expense.cost || 0);
+    } else {
+      groups.push({
+        date: expense.date,
+        items: [expense],
+        total: Number(expense.cost || 0),
+      });
+    }
+  }
+  return groups;
+}
+
+function ExpenseRow({ expense, onEdit, onDelete }) {
+  const tone = categoryTone(expense.category);
+  const receipts = expense.receipt_urls?.length
+    ? expense.receipt_urls
+    : expense.receipt_url
+      ? [expense.receipt_url]
+      : [];
+
+  return (
+    // The whole card opens the expense (a full-size button underneath); the receipt link and the
+    // menu sit above it and stay separately tappable.
+    <div className="relative flex gap-3 rounded-xl border border-gray-100 bg-card p-3 shadow-sm transition-shadow hover:shadow-md sm:p-4">
+      <button
+        type="button"
+        onClick={() => onEdit(expense)}
+        aria-label={`Edit ${expense.category}, ${formatMoney(expense.cost)}`}
+        className="absolute inset-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 active:bg-gray-50"
+      />
+      <div
+        aria-hidden
+        className={`pointer-events-none relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold uppercase sm:h-12 sm:w-12 sm:text-sm ${tone.badge}`}
+      >
+        {expense.category?.slice(0, 2)}
+      </div>
+
+      <div className="pointer-events-none relative min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <h4 className="truncate text-base font-semibold text-slate-900">
+              {expense.category}
+            </h4>
+            {/* Saved on this device, not on the server yet */}
+            {expense._pending && (
+              <span
+                className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                  expense._error
+                    ? "bg-red-100 text-red-700"
+                    : "bg-amber-100 text-amber-800"
+                }`}
+                title={expense._error || "Will upload when you're online"}
+              >
+                {expense._error ? (
+                  <AlertTriangle className="h-3 w-3" />
+                ) : (
+                  <CloudUpload className="h-3 w-3" />
+                )}
+                {expense._error ? "Sync failed" : "Waiting to sync"}
+              </span>
+            )}
+          </div>
+          <span className="shrink-0 whitespace-nowrap text-base font-bold text-slate-900">
+            {formatMoney(expense.cost)}
+          </span>
+        </div>
+
+        {(expense.assigned_to || receipts.length > 0) && (
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-slate-500">
+            {expense.assigned_to && (
+              <span className="flex items-center gap-1 whitespace-nowrap">
+                <User className="h-3 w-3" /> {expense.assigned_to}
+              </span>
+            )}
+            {receipts.length > 0 && (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <button className="pointer-events-auto relative -mx-1.5 -my-2 flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-2 text-indigo-600 transition-colors hover:text-indigo-700">
+                    {receipts.length > 1 ? (
+                      <Images className="h-3.5 w-3.5" />
+                    ) : (
+                      <ImageIcon className="h-3.5 w-3.5" />
+                    )}
+                    {receipts.length > 1
+                      ? `${receipts.length} receipts`
+                      : "Receipt"}
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="max-w-3xl">
+                  <DialogTitle>Receipts · {expense.category}</DialogTitle>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {receipts.map((url, idx) => (
+                      <div
+                        key={url}
+                        className="overflow-hidden rounded-lg border border-gray-100 shadow-sm"
+                      >
+                        <ReceiptImage
+                          url={url}
+                          alt={`Receipt ${idx + 1}`}
+                          className="h-auto min-h-24 w-full object-contain"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+        )}
+
+        {expense.notes && (
+          <p
+            className="mt-1.5 line-clamp-2 text-sm leading-snug text-slate-600"
+            dir="auto"
+          >
+            {expense.notes}
+          </p>
+        )}
+      </div>
+
+      {/* Quick actions on larger screens; on phones, tap the card and use Delete in the form */}
+      <div className="relative hidden shrink-0 self-center sm:block">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Actions for ${expense.category} expense`}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => onEdit(expense)}>
+              <Pencil className="mr-2 h-4 w-4" /> Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="text-red-600 focus:text-red-600"
+              onClick={() => onDelete(expense.id)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" /> Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   );
 }

@@ -268,7 +268,7 @@ export default function TripBudget() {
           to={`/TripDetails?id=${id}`}
           className="-ml-2 mb-2 inline-flex h-10 items-center rounded-lg px-2 text-slate-500 transition-colors hover:text-slate-900"
         >
-          <ArrowLeft className="w-4 h-4 mr-1" /> Back to Trip
+          <ArrowLeft className="w-4 h-4 mr-1" /> Trip
         </Link>
 
         <div className="flex justify-between items-start gap-3">
@@ -327,7 +327,7 @@ export default function TripBudget() {
                     {formError}
                   </p>
                 )}
-                <div className="pt-4 flex justify-end gap-2">
+                <div className="grid grid-cols-2 gap-2 pt-2 sm:flex sm:justify-end">
                   <Button
                     type="button"
                     variant="outline"
@@ -562,7 +562,7 @@ export default function TripBudget() {
                   {formError}
                 </p>
               )}
-              <div className="pt-4 flex justify-end gap-2">
+              <div className="grid grid-cols-2 gap-2 pt-2 sm:flex sm:justify-end">
                 <Button
                   type="button"
                   variant="outline"

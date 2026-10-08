@@ -99,6 +99,41 @@ Review date: 2026-10-08. `[x]` = done, `[ ]` = not done yet.
   - Editing a trip no longer rewrites its owner.
   - Clearer loading and error screens for trips.
 
+## 📱 Phone-first pass
+
+Every screen was checked at 375px and 320px wide (no sideways scrolling), in light and dark mode.
+
+- [x] **Dialogs become bottom sheets on phones.**
+  - They slide up from the bottom with a grab handle and respect the home bar.
+  - They no longer pop the keyboard open by themselves.
+  - Big ✕ button, and full-width Cancel / confirm buttons.
+  - Confirmations (delete, sign out) use the same sheet.
+- [x] **Touch sizes and feel.**
+  - Text fields, dropdowns and buttons are 44px tall on phones; menu items are taller too.
+  - No grey flash on tap, no double-tap delay, and no rubber-band scrolling of the whole page.
+- [x] **Dashboard.** "My Trips" and **+ New** share one row. Categories and Export all move into a ⋯ menu on phones. New trips start today by default.
+- [x] **Trip page.**
+  - Edit, Export and Delete move into a ⋯ menu beside the title on phones.
+  - Search and Filters share one row, with a count badge on Filters.
+  - The list starts much higher on the screen.
+- [x] **Expense list.**
+  - Grouped by day, with each day's total in a header that stays pinned while scrolling.
+  - Tap anywhere on an expense to open it.
+  - Each category has its own colour.
+  - The amount sits on the top line, so notes get the full width (Arabic notes align right).
+  - Two-column filter panel.
+- [x] **Expense form.**
+  - Compact three-column category chips with colour dots.
+  - Receipts moved up, right after the category.
+  - **Today / Yesterday** shortcuts for the date.
+  - One-tap name chips for "Assigned to" (names already used on the trip).
+  - A **Delete** button next to Save, with Undo afterwards.
+  - The page behind no longer scrolls while the form is open.
+- [x] **Small fixes.**
+  - Shorter back links ("← Trips", "← Trip").
+  - The Usage page header fits a phone.
+  - Admin usage stats aren't saved for offline use.
+
 ## 💡 Feature ideas (waiting for your go-ahead)
 
 - [ ] **Split and settle-up (who owes whom):** a list of travelers per trip, "paid by" and "split between" on each expense, and a settle-up summary. It builds on the existing `assigned_to` field.

@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
-import { FolderPlus, Search, FileSpreadsheet, CloudOff, Loader2 } from 'lucide-react';
+import { FolderPlus, Search, FileSpreadsheet, CloudOff, Loader2, MoreHorizontal, Settings2, Plus } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -19,6 +20,7 @@ export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
   const outbox = useOutbox();
   const online = useOnline();
   const { user } = useAuth();
@@ -105,17 +107,22 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">My Trips</h1>
-          <p className="text-slate-500 mt-1">Manage your travel budgets and expenses</p>
+      {/* Phones: title and "New" share one row; the less-used actions sit in a ⋯ menu */}
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">My Trips</h1>
+          <p className="text-sm sm:text-base text-slate-500 mt-1">Manage your travel budgets and expenses</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <CategoryManager />
+        <div className="flex shrink-0 items-center gap-2">
+          <CategoryManager open={isCategoriesOpen} onOpenChange={setIsCategoriesOpen} />
+          <Button variant="outline" className="hidden sm:inline-flex rounded-full" onClick={() => setIsCategoriesOpen(true)}>
+            <Settings2 className="w-4 h-4 mr-2" />
+            Categories
+          </Button>
           {trips.length > 0 && (
             <Button
               variant="outline"
-              className="rounded-full"
+              className="hidden sm:inline-flex rounded-full"
               onClick={exportAll}
               disabled={isExporting || !online}
               title={online ? 'Download every expense as a spreadsheet' : 'Needs a connection'}
@@ -124,11 +131,30 @@ export default function Dashboard() {
               Export all
             </Button>
           )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" className="sm:hidden rounded-full" aria-label="More actions">
+                {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreHorizontal className="w-5 h-5" />}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-60">
+              <DropdownMenuItem onSelect={() => setIsCategoriesOpen(true)}>
+                <Settings2 className="w-4 h-4" /> Manage categories
+              </DropdownMenuItem>
+              {trips.length > 0 && (
+                <DropdownMenuItem onSelect={exportAll} disabled={isExporting || !online}>
+                  <FileSpreadsheet className="w-4 h-4" /> Export all trips (Excel)
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-100 dark:shadow-none rounded-full px-6" disabled={!online} title={online ? undefined : "Needs a connection"}>
-                <FolderPlus className="w-4 h-4 mr-2" />
-                New Trip
+              <Button className="bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-100 dark:shadow-none rounded-full px-4 sm:px-6" disabled={!online} title={online ? undefined : "Needs a connection"}>
+                <Plus className="w-4 h-4 sm:hidden" />
+                <FolderPlus className="w-4 h-4 mr-2 hidden sm:block" />
+                <span className="sm:hidden">New</span>
+                <span className="hidden sm:inline">New Trip</span>
               </Button>
             </DialogTrigger>
           <DialogContent>
@@ -144,20 +170,20 @@ export default function Dashboard() {
                 <Label htmlFor="amount">Total Budget</Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-medium">EGP</span>
-                  <Input id="amount" name="received_amount" type="number" inputMode="decimal" min="0" step="0.01" className="pl-12" placeholder="2000.00" required />
+                  <Input id="amount" name="received_amount" type="number" inputMode="decimal" min="0" step="0.01" className="pl-12" placeholder="2000.00" required enterKeyHint="next" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="start">Start Date</Label>
-                  <Input id="start" name="start_date" type="date" required />
+                  <Input id="start" name="start_date" type="date" required defaultValue={format(new Date(), 'yyyy-MM-dd')} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="end">End Date</Label>
                   <Input id="end" name="end_date" type="date" />
                 </div>
               </div>
-              <div className="pt-4 flex justify-end gap-2">
+              <div className="grid grid-cols-2 gap-2 pt-2 sm:flex sm:justify-end">
                 <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
                 <Button type="submit" className="bg-indigo-600 text-white hover:bg-indigo-700" disabled={createTripMutation.isPending}>
                   {createTripMutation.isPending ? 'Creating...' : 'Create Trip'}

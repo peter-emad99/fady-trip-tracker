@@ -11,10 +11,14 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 
 const showError = (title) => (error) => toast({ variant: 'destructive', title, description: error.message });
 
-export default function CategoryManager() {
+// Pass open/onOpenChange to open it from elsewhere (e.g. a menu); otherwise it shows its own button
+export default function CategoryManager({ open, onOpenChange }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [isOpen, setIsOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const controlled = open !== undefined;
+  const isOpen = controlled ? open : ownOpen;
+  const setIsOpen = controlled ? onOpenChange : setOwnOpen;
   const [editingId, setEditingId] = useState(null);
   const [name, setName] = useState('');
   const [confirm, setConfirm] = useState(null);
@@ -101,12 +105,14 @@ export default function CategoryManager() {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="rounded-full">
-          <Settings2 className="w-4 h-4 mr-2" />
-          Categories
-        </Button>
-      </DialogTrigger>
+      {!controlled && (
+        <DialogTrigger asChild>
+          <Button variant="outline" className="rounded-full">
+            <Settings2 className="w-4 h-4 mr-2" />
+            Categories
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Manage Categories</DialogTitle>
@@ -125,7 +131,7 @@ export default function CategoryManager() {
           </Button>
         </form>
 
-        <div className="mt-6 space-y-2 max-h-[300px] overflow-y-auto pr-2">
+        <div className="mt-2 space-y-2 sm:max-h-[300px] sm:overflow-y-auto sm:pr-2">
           {isLoading ? (
             <p className="text-center text-sm text-slate-500">Loading...</p>
           ) : (

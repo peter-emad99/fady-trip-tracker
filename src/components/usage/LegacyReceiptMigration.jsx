@@ -36,7 +36,7 @@ export default function LegacyReceiptMigration({ driveReady, onFinished }) {
   // One entry per file, in case the same file is used by more than one expense
   const files = useMemo(() => {
     const byUrl = new Map();
-    for (const { url, expense_id } of legacyQuery.data || []) {
+    for (const { url, expense_id } of Array.isArray(legacyQuery.data) ? legacyQuery.data : []) {
       byUrl.set(url, [...(byUrl.get(url) || []), expense_id]);
     }
     return [...byUrl].map(([url, expenseIds]) => ({ url, expenseIds }));

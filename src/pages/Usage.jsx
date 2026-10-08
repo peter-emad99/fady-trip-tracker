@@ -87,7 +87,7 @@ function TrippyFolderUsage({ drive }) {
       </div>
       <Progress value={Math.max(percent, drive.receiptsBytes ? 0.5 : 0)} className="h-1.5 bg-card" indicatorClassName="bg-indigo-400" />
       <p className="text-xs text-slate-500">
-        {drive.receiptsCount.toLocaleString()} file{drive.receiptsCount === 1 ? "" : "s"} ·{" "}
+        {(drive.receiptsCount ?? 0).toLocaleString()} file{drive.receiptsCount === 1 ? "" : "s"} ·{" "}
         {percent < 0.1 && drive.receiptsBytes ? "<0.1" : percent.toFixed(1)}% of this account&apos;s{" "}
         {drive.limit ? "storage" : "used space"}
       </p>
@@ -164,15 +164,15 @@ export default function Usage() {
   return (
     <div className="space-y-6">
       <div>
-        <Link to="/" className="inline-flex items-center text-slate-500 hover:text-slate-900 mb-4 transition-colors">
-          <ArrowLeft className="w-4 h-4 mr-1" /> Back to Trips
+        <Link to="/" className="-ml-2 mb-1 inline-flex h-10 items-center rounded-lg px-2 text-slate-500 transition-colors hover:text-slate-900">
+          <ArrowLeft className="w-4 h-4 mr-1" /> Trips
         </Link>
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">Usage</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Usage</h1>
             <p className="text-slate-500 mt-1">Database and storage limits</p>
           </div>
-          <Button variant="outline" size="sm" onClick={refresh} disabled={isFetching} className="gap-2 shrink-0">
+          <Button variant="outline" onClick={refresh} disabled={isFetching} className="gap-2 shrink-0">
             <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} /> Refresh
           </Button>
         </div>

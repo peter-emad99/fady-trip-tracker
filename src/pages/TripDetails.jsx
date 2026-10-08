@@ -27,6 +27,7 @@ import {
   FileText,
   FileSpreadsheet,
   CloudOff,
+  MoreHorizontal,
   Trash2,
   ChevronRight,
   Loader2,
@@ -50,6 +51,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -126,6 +129,16 @@ export default function TripDetails() {
     () => serverExpenses && applyOutbox(serverExpenses, outbox, id),
     [serverExpenses, outbox, id],
   );
+
+  // Names used on this trip, most used first, offered as one-tap picks in the expense form
+  const people = useMemo(() => {
+    const counts = {};
+    for (const e of expenses || []) {
+      const name = e.assigned_to?.trim();
+      if (name) counts[name] = (counts[name] || 0) + 1;
+    }
+    return Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+  }, [expenses]);
 
   // Deletes wait a few seconds before they're sent, so Undo can simply cancel them. They're kept
   // in the offline outbox, so closing the app in the meantime doesn't lose them.
@@ -213,6 +226,15 @@ export default function TripDetails() {
     const formData = new FormData(e.target);
     updateTripMutation.mutate(Object.fromEntries(formData));
   };
+
+  const confirmDeleteTrip = () =>
+    setConfirm({
+      title: `Delete "${trip.name}"?`,
+      description:
+        "This deletes the trip, all its expenses and their receipts. It can't be undone.",
+      confirmLabel: "Delete trip",
+      onConfirm: () => deleteTripMutation.mutate(),
+    });
 
   const handleExportCsv = async () => {
     try {
@@ -324,15 +346,15 @@ export default function TripDetails() {
   return (
     <div className="relative">
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-5 sm:mb-6">
         <Link
           to="/"
-          className="-ml-2 mb-2 inline-flex h-10 items-center rounded-lg px-2 text-slate-500 transition-colors hover:text-slate-900"
+          className="-ml-2 mb-1 inline-flex h-10 items-center rounded-lg px-2 text-slate-500 transition-colors hover:text-slate-900"
         >
-          <ArrowLeft className="w-4 h-4 mr-1" /> Back to Trips
+          <ArrowLeft className="w-4 h-4 mr-1" /> Trips
         </Link>
 
-        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+        <div className="flex items-start justify-between gap-3 md:items-center">
           <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 break-words">
               {trip.name}
@@ -345,7 +367,51 @@ export default function TripDetails() {
               </span>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {/* Phones: one ⋯ menu instead of a row of buttons */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="shrink-0 rounded-full sm:hidden"
+                aria-label="Trip actions"
+              >
+                {isExporting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MoreHorizontal className="h-5 w-5" />
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-60">
+              <DropdownMenuItem
+                disabled={!online}
+                onSelect={() => setIsEditOpen(true)}
+              >
+                <Pencil className="h-4 w-4" /> Edit trip details
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                Export
+              </DropdownMenuLabel>
+              <DropdownMenuItem disabled={isExporting} onSelect={handleExport}>
+                <FileText className="h-4 w-4" /> PDF report
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleExportCsv}>
+                <FileSpreadsheet className="h-4 w-4" /> Excel (CSV)
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={deleteTripMutation.isPending || !online}
+                className="text-red-600 focus:text-red-600"
+                onSelect={confirmDeleteTrip}
+              >
+                <Trash2 className="h-4 w-4" /> Delete trip
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <div className="hidden shrink-0 flex-wrap items-center gap-2 sm:flex">
             <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
               <DialogTrigger asChild>
                 {/* Only expenses work offline; trip changes need a connection */}
@@ -412,7 +478,7 @@ export default function TripDetails() {
                       />
                     </div>
                   </div>
-                  <div className="pt-4 flex justify-end gap-2">
+                  <div className="grid grid-cols-2 gap-2 pt-2 sm:flex sm:justify-end">
                     <Button
                       type="button"
                       variant="outline"
@@ -480,15 +546,7 @@ export default function TripDetails() {
               className="gap-2 px-3 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
               disabled={deleteTripMutation.isPending || !online}
               title={online ? undefined : "Needs a connection"}
-              onClick={() =>
-                setConfirm({
-                  title: `Delete "${trip.name}"?`,
-                  description:
-                    "This deletes the trip, all its expenses and their receipts. It can't be undone.",
-                  confirmLabel: "Delete trip",
-                  onConfirm: () => deleteTripMutation.mutate(),
-                })
-              }
+              onClick={confirmDeleteTrip}
             >
               <Trash2 className="w-4 h-4" />
               Delete
@@ -498,7 +556,7 @@ export default function TripDetails() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-8">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-5 sm:mb-8">
         {/* The only way into sub-budgets, so it looks and behaves like a button */}
         <Link
           to={`/TripBudget?id=${id}`}
@@ -514,7 +572,7 @@ export default function TripDetails() {
           <p className="text-base font-bold leading-tight text-indigo-900 sm:text-lg">
             {formatMoney(trip.received_amount)}
           </p>
-          <p className="mt-1 text-[11px] font-medium text-indigo-600 sm:text-xs">
+          <p className="mt-1 whitespace-nowrap text-[11px] font-medium text-indigo-600 sm:text-xs">
             Sub-budgets
           </p>
         </Link>
@@ -551,7 +609,7 @@ export default function TripDetails() {
       </div>
 
       {/* Progress Bar */}
-      <div className="mb-8">
+      <div className="mb-6 sm:mb-8">
         <div className="flex justify-between text-xs mb-2 text-slate-500">
           <span>Budget spent</span>
           <span
@@ -643,6 +701,11 @@ export default function TripDetails() {
             tripId={id}
             categories={categories}
             expenseToEdit={editingExpense}
+            people={people}
+            onDelete={(expense) => {
+              setShowExpenseForm(false);
+              deleteExpense(expense);
+            }}
             onClose={() => setShowExpenseForm(false)}
             onSuccess={() => {
               invalidateTripData();

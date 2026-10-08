@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
-import { X, Upload, Camera, Calendar, Tag, User, Loader2 } from 'lucide-react';
+import { X, Upload, Camera, Calendar, User, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,7 +16,8 @@ import { queueSave, hasPendingSave } from '@/lib/outbox';
 import ReceiptImage from './ReceiptImage';
 import { toast } from '@/components/ui/use-toast';
 import { loadOpenCV } from '@/lib/docScanner';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns';
+import { categoryTone } from '@/lib/categoryColor';
 import { formatMoney, parseAmount } from '@/lib/format';
 import ConfirmDialog from '@/components/ConfirmDialog';
 
@@ -25,7 +26,7 @@ const ReceiptReview = React.lazy(() => import('./ReceiptReview'));
 const receiptActionClass =
   'flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/60 py-3 text-xs font-medium text-indigo-600 transition-colors hover:border-indigo-400 hover:bg-indigo-50 active:bg-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400';
 
-export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose, onSuccess }) {
+export default function ExpenseForm({ tripId, categories, expenseToEdit, people = [], onClose, onSuccess, onDelete }) {
   const { user } = useAuth();
   const { register, handleSubmit, setValue, watch, getValues, formState: { errors, isSubmitting, isDirty } } = useForm({
     defaultValues: {
@@ -58,6 +59,15 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       const removedSaved = React.useRef([]);
       const saved = React.useRef(false);
       const closed = React.useRef(false);
+
+      // Keep the page behind the sheet from scrolling along with it
+      React.useEffect(() => {
+        const { overflow } = document.body.style;
+        document.body.style.overflow = 'hidden';
+        return () => {
+          document.body.style.overflow = overflow;
+        };
+      }, []);
 
       React.useEffect(() => {
         closed.current = false;
@@ -281,8 +291,8 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        <form id="expense-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-6">
+        <form id="expense-form" onSubmit={handleSubmit(onSubmit)} className="space-y-5 sm:space-y-6">
           
           {/* Amount Input */}
           <div className="space-y-2">
@@ -317,12 +327,12 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
           {/* Category Selection */}
           <div className="space-y-2">
             <p id="expense-category-label" className="text-xs font-medium text-slate-500 uppercase tracking-wider">Category</p>
-            <div role="radiogroup" aria-labelledby="expense-category-label" className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div role="radiogroup" aria-labelledby="expense-category-label" className="grid grid-cols-3 gap-2">
               {categories?.map((cat) => (
                 <label
                   key={cat.id}
                   className={`
-                    flex flex-col items-center justify-center p-3 rounded-xl border cursor-pointer transition-all
+                    flex min-h-11 items-center gap-2 px-2.5 py-2 rounded-xl border cursor-pointer transition-all
                     has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-indigo-400
                     ${watch('category') === cat.name 
                       ? 'border-indigo-600 bg-indigo-50 text-indigo-700' 
@@ -335,8 +345,8 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
                     className="sr-only"
                     {...register('category')}
                   />
-                  <Tag className="w-5 h-5 mb-1.5 opacity-70" />
-                  <span className="text-xs font-medium text-center line-clamp-1">{cat.name}</span>
+                  <span aria-hidden className={`h-2.5 w-2.5 shrink-0 rounded-full ${categoryTone(cat.name).dot}`} />
+                  <span className="min-w-0 truncate text-xs font-medium">{cat.name}</span>
                 </label>
               ))}
               {categories?.length === 0 && (
@@ -345,69 +355,6 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
                 </p>
               )}
             </div>
-          </div>
-
-          {/* Date & Budget */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="expense-date" className="text-xs font-medium text-slate-500 uppercase tracking-wider">Date</Label>
-              <div className="relative">
-                <Calendar className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input 
-                  id="expense-date"
-                  type="date" 
-                  className="pl-9"
-                  {...register('date', { required: true })} 
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="expense-budget" className="text-xs font-medium text-slate-500 uppercase tracking-wider">Sub-budget</Label>
-              {/* Radix Select can't hold an empty value, so "none" stands in for no sub-budget */}
-              <Select
-                value={watch('trip_budget_id') || 'none'}
-                onValueChange={(value) => setValue('trip_budget_id', value === 'none' ? '' : value, { shouldDirty: true })}
-                disabled={!budgets.length && !watch('trip_budget_id')}
-              >
-                <SelectTrigger id="expense-budget" className="h-10">
-                  <SelectValue placeholder="None" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">{budgets.length ? 'None' : 'No sub-budgets yet'}</SelectItem>
-                  {budgets.map((budget) => (
-                    <SelectItem key={budget.id} value={budget.id}>
-                      {budget.name} · {formatMoney(budget.amount)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Assigned To */}
-          <div className="space-y-2">
-            <Label htmlFor="expense-assigned" className="text-xs font-medium text-slate-500 uppercase tracking-wider">Assigned To</Label>
-            <div className="relative">
-              <User className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input 
-                id="expense-assigned"
-                placeholder="Me" 
-                className="pl-9"
-                {...register('assigned_to')} 
-              />
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div className="space-y-2">
-            <Label htmlFor="expense-notes" className="text-xs font-medium text-slate-500 uppercase tracking-wider">Notes</Label>
-            <Textarea 
-              id="expense-notes"
-              placeholder="What was this for?" 
-              className="resize-none"
-              rows={3}
-              {...register('notes')} 
-            />
           </div>
 
           {/* Receipt Upload */}
@@ -510,17 +457,137 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
             </div>
           </div>
 
+
+          {/* Date & Budget */}
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            <div className="space-y-2">
+              <div className="flex h-5 items-center justify-between gap-1">
+                <Label htmlFor="expense-date" className="text-xs font-medium text-slate-500 uppercase tracking-wider">Date</Label>
+                {/* One tap for the usual answers */}
+                <div className="-my-2 flex">
+                  {[['Today', 0], ['Yday', 1]].map(([label, daysAgo]) => {
+                    const value = format(subDays(new Date(), daysAgo), 'yyyy-MM-dd');
+                    const active = watch('date') === value;
+                    return (
+                      <button
+                        key={label}
+                        type="button"
+                        aria-label={daysAgo ? 'Yesterday' : 'Today'}
+                        onClick={() => setValue('date', value, { shouldDirty: true })}
+                        className={`rounded-md px-1.5 py-2 text-[11px] font-semibold ${active ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="relative">
+                <Calendar className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input 
+                  id="expense-date"
+                  type="date" 
+                  className="pl-9"
+                  {...register('date', { required: true })} 
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="expense-budget" className="flex h-5 items-center text-xs font-medium text-slate-500 uppercase tracking-wider">Sub-budget</Label>
+              {/* Radix Select can't hold an empty value, so "none" stands in for no sub-budget */}
+              <Select
+                value={watch('trip_budget_id') || 'none'}
+                onValueChange={(value) => setValue('trip_budget_id', value === 'none' ? '' : value, { shouldDirty: true })}
+                disabled={!budgets.length && !watch('trip_budget_id')}
+              >
+                <SelectTrigger id="expense-budget">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{budgets.length ? 'None' : 'No sub-budgets yet'}</SelectItem>
+                  {budgets.map((budget) => (
+                    <SelectItem key={budget.id} value={budget.id}>
+                      {budget.name} · {formatMoney(budget.amount)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Assigned To */}
+          <div className="space-y-2">
+            <Label htmlFor="expense-assigned" className="text-xs font-medium text-slate-500 uppercase tracking-wider">Assigned To</Label>
+            <div className="relative">
+              <User className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input 
+                id="expense-assigned"
+                placeholder="Me" 
+                className="pl-9"
+                autoComplete="off"
+                enterKeyHint="next"
+                {...register('assigned_to')} 
+              />
+            </div>
+            {/* Names already used on this trip, so there's less typing */}
+            {people.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {people.slice(0, 6).map((name) => {
+                  const active = watch('assigned_to') === name;
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => setValue('assigned_to', active ? '' : name, { shouldDirty: true })}
+                      className={`h-9 rounded-full border px-3 text-xs font-medium transition-colors ${
+                        active ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-slate-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Notes */}
+          <div className="space-y-2">
+            <Label htmlFor="expense-notes" className="text-xs font-medium text-slate-500 uppercase tracking-wider">Notes</Label>
+            <Textarea 
+              id="expense-notes"
+              placeholder="What was this for?" 
+              className="resize-none"
+              rows={2}
+              dir="auto"
+              {...register('notes')} 
+            />
+          </div>
+
         </form>
       </div>
 
-      <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-gray-100 bg-gray-50/50">
+      <div className="flex gap-2 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-gray-100 bg-gray-50/50">
+        {/* On phones this is the way to delete (the list has no ⋯ menu there); Undo is offered after */}
+        {expenseToEdit && onDelete && (
+          <Button
+            type="button"
+            variant="outline"
+            aria-label="Delete expense"
+            className="h-12 w-12 shrink-0 p-0 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+            disabled={isSubmitting}
+            onClick={() => onDelete(expenseToEdit)}
+          >
+            <Trash2 className="w-5 h-5" />
+          </Button>
+        )}
         <Button 
           type="submit" 
           form="expense-form" 
-          className="w-full h-12 text-lg font-semibold bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200 dark:shadow-none"
+          className="flex-1 h-12 text-lg font-semibold bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200 dark:shadow-none"
           disabled={isSubmitting || uploading}
         >
-          {isSubmitting ? 'Saving...' : 'Save Expense'}
+          {isSubmitting ? 'Saving...' : uploading ? 'Uploading photo…' : expenseToEdit ? 'Save changes' : 'Save expense'}
         </Button>
       </div>
     </motion.div>
