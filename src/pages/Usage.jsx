@@ -73,6 +73,28 @@ function UsageCard({ icon: Icon, title, subtitle, used, limit, children, error }
   );
 }
 
+// Just Trippy's own files, as a share of the whole Drive account
+function TrippyFolderUsage({ drive }) {
+  if (!drive) return null;
+  const total = drive.limit || drive.usage || 0;
+  const percent = total ? (drive.receiptsBytes / total) * 100 : 0;
+
+  return (
+    <div className="bg-indigo-50/60 rounded-xl p-3 space-y-1.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-sm font-medium text-slate-700">Trippy Receipts folder</span>
+        <span className="text-sm font-semibold text-indigo-700 shrink-0">{formatBytes(drive.receiptsBytes)}</span>
+      </div>
+      <Progress value={Math.max(percent, drive.receiptsBytes ? 0.5 : 0)} className="h-1.5 bg-white" indicatorClassName="bg-indigo-400" />
+      <p className="text-xs text-slate-500">
+        {drive.receiptsCount.toLocaleString()} file{drive.receiptsCount === 1 ? "" : "s"} ·{" "}
+        {percent < 0.1 && drive.receiptsBytes ? "<0.1" : percent.toFixed(1)}% of this account&apos;s{" "}
+        {drive.limit ? "storage" : "used space"}
+      </p>
+    </div>
+  );
+}
+
 function Row({ label, value }) {
   return (
     <div className="flex justify-between gap-3 text-sm py-1.5 border-t border-gray-50 first:border-t-0">
@@ -191,14 +213,11 @@ export default function Usage() {
           limit={drive?.limit}
           error={driveQuery.error && `Couldn't load Google Drive stats: ${driveQuery.error.message}`}
         >
+          <TrippyFolderUsage drive={drive} />
           <div>
             <Row
               label="Account"
               value={drive?.accountName ? `${drive.accountName} (${drive.accountEmail})` : drive?.accountEmail || "Unknown"}
-            />
-            <Row
-              label="Receipts"
-              value={`${drive?.receiptsCount.toLocaleString()} files · ${formatBytes(drive?.receiptsBytes)}`}
             />
             <Row label="Drive files (all)" value={formatBytes(drive?.usageInDrive)} />
             <Row label="Drive trash" value={formatBytes(drive?.usageInTrash)} />

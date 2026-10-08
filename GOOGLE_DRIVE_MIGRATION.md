@@ -82,6 +82,7 @@ Redeploy so the function picks it up.
 
 > **Pick the account carefully.** The app can only see files it uploaded with this account's token.
 > Switching to another account later means existing Drive receipts stop loading unless they're moved.
+> See [docs/SWITCHING_DRIVE_ACCOUNT.md](docs/SWITCHING_DRIVE_ACCOUNT.md) for how to do that safely.
 
 ### 5. Run the database migrations (you)
 

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
-import { X, Upload, Camera, Calendar, Tag, DollarSign, User, Trash2, Plus } from 'lucide-react';
+import { X, Upload, Camera, Calendar, Tag, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,6 +29,7 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
 
       const [uploading, setUploading] = React.useState(false);
       const fileInputRef = React.useRef(null);
+      const cameraInputRef = React.useRef(null);
       const [budgets, setBudgets] = React.useState([]);
 
       // Fetch trip budgets
@@ -72,7 +73,7 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       } finally {
       setUploading(false);
       // Reset input so same files can be selected again if needed
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      e.target.value = '';
       }
       };
 
@@ -262,6 +263,15 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
               ref={fileInputRef}
               onChange={handleFileUpload}
             />
+            {/* capture opens the rear camera directly on phones; desktops ignore it */}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              ref={cameraInputRef}
+              onChange={handleFileUpload}
+            />
 
             <div className="grid grid-cols-3 gap-3">
               {receiptUrls.map((url, index) => (
@@ -280,6 +290,24 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
                   </div>
               ))}
 
+              {/* Only shown on touch devices, where a camera is likely */}
+              <Button
+                  type="button"
+                  variant="outline"
+                  className="aspect-square hidden [@media(pointer:coarse)]:flex flex-col gap-1 border-dashed border-2 hover:border-indigo-400 hover:bg-indigo-50"
+                  onClick={() => cameraInputRef.current?.click()}
+                  disabled={uploading}
+              >
+                  {uploading ? (
+                      <span className="animate-spin">⏳</span>
+                  ) : (
+                      <>
+                          <Camera className="w-6 h-6 text-indigo-500" />
+                          <span className="text-[10px] text-indigo-600 font-medium">Camera</span>
+                      </>
+                  )}
+              </Button>
+
               <Button
                   type="button"
                   variant="outline"
@@ -291,8 +319,8 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
                       <span className="animate-spin">⏳</span>
                   ) : (
                       <>
-                          <Plus className="w-6 h-6 text-indigo-500" />
-                          <span className="text-[10px] text-indigo-600 font-medium">Add</span>
+                          <Upload className="w-6 h-6 text-indigo-500" />
+                          <span className="text-[10px] text-indigo-600 font-medium">Upload</span>
                       </>
                   )}
               </Button>
