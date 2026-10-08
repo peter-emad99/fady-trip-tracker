@@ -14,7 +14,7 @@ import {
 export default function ConfirmDialog({ confirm, onClose }) {
   return (
     <AlertDialog open={!!confirm} onOpenChange={(open) => !open && onClose()}>
-      <AlertDialogContent className="z-[70] max-w-[calc(100vw-2rem)] rounded-2xl sm:max-w-md">
+      <AlertDialogContent className="z-[70] sm:max-w-md sm:rounded-2xl">
         <AlertDialogHeader>
           <AlertDialogTitle>{confirm?.title}</AlertDialogTitle>
           {confirm?.description && <AlertDialogDescription>{confirm.description}</AlertDialogDescription>}
