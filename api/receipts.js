@@ -1,4 +1,4 @@
-import { json, requireUser, isAdmin, driveFetch, getReceiptFile, uploadFile, trashIfEmptyExpenseFolder } from './_lib/google.js';
+import { json, checkUser, isAdmin, driveFetch, getReceiptFile, uploadFile, trashIfEmptyExpenseFolder } from './_lib/google.js';
 
 // Vercel rejects request bodies over 4.5 MB; the client compresses images well below this.
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -35,8 +35,8 @@ export async function GET(request) {
 
 // POST /api/receipts?name=<fileName> with the raw image as the body.
 export async function POST(request) {
-  const user = await requireUser(request);
-  if (!user) return json({ error: 'Unauthorized' }, 401);
+  const { user, error: authError } = await checkUser(request);
+  if (authError) return authError;
 
   const mimeType = (request.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
   if (!ALLOWED_TYPES.includes(mimeType)) {
@@ -61,8 +61,8 @@ export async function POST(request) {
 
 // DELETE /api/receipts?id=<fileId> -> moves the receipt to the Drive trash.
 export async function DELETE(request) {
-  const user = await requireUser(request);
-  if (!user) return json({ error: 'Unauthorized' }, 401);
+  const { user, error: authError } = await checkUser(request);
+  if (authError) return authError;
 
   const id = new URL(request.url).searchParams.get('id');
 

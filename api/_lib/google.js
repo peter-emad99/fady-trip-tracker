@@ -16,14 +16,27 @@ export function json(body, status = 200, headers = {}) {
   });
 }
 
-// Optional comma-separated allow-list (Vercel env); when set, only these accounts may use the Drive API
+// Optional allow-list (Vercel env ALLOWED_EMAILS); when set, only these accounts may use the Drive API.
+// Emails can be separated by commas, semicolons, spaces or new lines, and may be quoted.
 const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '')
-  .split(',')
-  .map((email) => email.trim().toLowerCase())
+  .split(/[\s,;]+/)
+  .map((email) => email.replace(/^["'<]+|["'>]+$/g, '').trim().toLowerCase())
   .filter(Boolean);
 
-// Verifies the Supabase session token sent by the browser and returns the user, or null.
-export async function requireUser(request) {
+// Checks the browser's Supabase session and the allow-list.
+// Returns { user } when allowed, or { error } with a response that says why not.
+export async function checkUser(request) {
+  const user = await sessionUser(request);
+  if (!user) return { error: json({ error: 'Your session has expired. Sign out and sign in again.' }, 401) };
+  if (ALLOWED_EMAILS.length && !ALLOWED_EMAILS.includes(user.email?.toLowerCase())) {
+    console.warn(`Refused ${user.email}: not in ALLOWED_EMAILS`);
+    return { error: json({ error: `${user.email} isn't allowed to use receipts (not in ALLOWED_EMAILS)` }, 403) };
+  }
+  return { user };
+}
+
+// The user behind the request's Supabase session token, or null.
+async function sessionUser(request) {
   const authHeader = request.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) return null;
 
@@ -34,9 +47,7 @@ export async function requireUser(request) {
     headers: { Authorization: authHeader, apikey: anonKey },
   });
   if (!res.ok) return null;
-  const user = await res.json();
-  if (ALLOWED_EMAILS.length && !ALLOWED_EMAILS.includes(user.email?.toLowerCase())) return null;
-  return user;
+  return res.json();
 }
 
 // Checks the `is_admin` flag (profiles table) for the user behind the request's session token.

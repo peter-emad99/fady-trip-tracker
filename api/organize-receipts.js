@@ -1,6 +1,6 @@
 import {
   json,
-  requireUser,
+  checkUser,
   supabaseSelect,
   getFolderId,
   getReceiptFile,
@@ -32,7 +32,8 @@ function driveIds(expense) {
 //   { tripId }    -> renames the trip's folder after the trip is renamed (doesn't create one)
 // The caller must be able to read the rows (row-level security applies).
 export async function POST(request) {
-  if (!(await requireUser(request))) return json({ error: 'Unauthorized' }, 401);
+  const { error: authError } = await checkUser(request);
+  if (authError) return authError;
 
   const { expenseId, tripId } = await request.json().catch(() => ({}));
 

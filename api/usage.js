@@ -1,8 +1,9 @@
-import { json, requireUser, isAdmin, driveFetch } from './_lib/google.js';
+import { json, checkUser, isAdmin, driveFetch } from './_lib/google.js';
 
 // GET /api/usage -> Google Drive quota plus how much of it the receipts folder uses.
 export async function GET(request) {
-  if (!(await requireUser(request))) return json({ error: 'Unauthorized' }, 401);
+  const { error } = await checkUser(request);
+  if (error) return error;
   if (!(await isAdmin(request))) return json({ error: 'Only admins can view usage' }, 403);
 
   try {
