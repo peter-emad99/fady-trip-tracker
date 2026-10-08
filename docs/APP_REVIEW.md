@@ -124,7 +124,7 @@ Every screen was checked at 375px and 320px wide (no sideways scrolling), in lig
   - Two-column filter panel.
 - [x] **Expense form.**
   - Compact three-column category chips with colour dots.
-  - Receipts moved up, right after the category.
+  - Receipts sit at the end of the form, after Notes.
   - **Today / Yesterday** shortcuts for the date.
   - One-tap name chips for "Assigned to" (names already used on the trip).
   - A **Delete** button next to Save, with Undo afterwards.

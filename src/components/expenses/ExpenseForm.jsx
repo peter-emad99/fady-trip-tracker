@@ -357,107 +357,6 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, people 
             </div>
           </div>
 
-          {/* Receipt Upload */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Receipts</p>
-              {receiptUrls.length + pending.length > 0 && (
-                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-600">
-                  {receiptUrls.length + pending.length}
-                </span>
-              )}
-            </div>
-
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              ref={fileInputRef}
-              onChange={handlePicked('upload')}
-            />
-            {/* capture opens the rear camera directly on phones; desktops ignore it */}
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              ref={cameraInputRef}
-              onChange={handlePicked('camera')}
-            />
-            {review && (
-              <React.Suspense fallback={null}>
-                <ReceiptReview
-                  key={review.version}
-                  file={review.files[review.index]}
-                  index={review.index}
-                  total={review.files.length}
-                  source={review.source}
-                  onUse={handleReviewUse}
-                  onUseAllOriginal={handleUseAllOriginal}
-                  onSkip={nextReview}
-                  onRetake={() => openPicker(review.source)}
-                  onCancel={() => setReview(null)}
-                />
-              </React.Suspense>
-            )}
-
-            {receiptUrls.length + pending.length > 0 && (
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                {receiptUrls.map((url, index) => (
-                  <div key={url} className="relative aspect-[3/4] rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
-                    <ReceiptImage
-                      url={url}
-                      alt={`Receipt ${index + 1}`}
-                      link
-                      linkClassName="block w-full h-full"
-                      className="w-full h-full object-cover"
-                    />
-                    {isLocalReceipt(url) && (
-                      <span className="absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
-                        Not uploaded
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      aria-label={`Remove receipt ${index + 1}`}
-                      onClick={() => removeReceipt(index)}
-                      className="absolute top-1 right-1 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-red-500"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-                {pending.map((item) => (
-                  <div key={item.id} className="relative aspect-[3/4] rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
-                    <img src={item.preview} alt="" className="w-full h-full object-cover opacity-50" />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Hidden buttons don't take a column, so the visible ones always share the full width */}
-            <div className="grid grid-flow-col auto-cols-fr gap-2">
-              {/* Only shown on touch devices, where a camera is likely */}
-              <button
-                type="button"
-                onClick={() => openPicker('camera')}
-                className={`${receiptActionClass} hidden [@media(pointer:coarse)]:flex`}
-              >
-                <Camera className="w-5 h-5" />
-                Camera
-              </button>
-              <button type="button" onClick={() => openPicker('upload')} className={`${receiptActionClass} flex`}>
-                <Upload className="w-5 h-5" />
-                Upload
-              </button>
-            </div>
-          </div>
-
-
           {/* Date & Budget */}
           <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <div className="space-y-2">
@@ -564,6 +463,106 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, people 
             />
           </div>
 
+
+          {/* Receipt Upload */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Receipts</p>
+              {receiptUrls.length + pending.length > 0 && (
+                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-600">
+                  {receiptUrls.length + pending.length}
+                </span>
+              )}
+            </div>
+
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              ref={fileInputRef}
+              onChange={handlePicked('upload')}
+            />
+            {/* capture opens the rear camera directly on phones; desktops ignore it */}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              ref={cameraInputRef}
+              onChange={handlePicked('camera')}
+            />
+            {review && (
+              <React.Suspense fallback={null}>
+                <ReceiptReview
+                  key={review.version}
+                  file={review.files[review.index]}
+                  index={review.index}
+                  total={review.files.length}
+                  source={review.source}
+                  onUse={handleReviewUse}
+                  onUseAllOriginal={handleUseAllOriginal}
+                  onSkip={nextReview}
+                  onRetake={() => openPicker(review.source)}
+                  onCancel={() => setReview(null)}
+                />
+              </React.Suspense>
+            )}
+
+            {receiptUrls.length + pending.length > 0 && (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {receiptUrls.map((url, index) => (
+                  <div key={url} className="relative aspect-[3/4] rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                    <ReceiptImage
+                      url={url}
+                      alt={`Receipt ${index + 1}`}
+                      link
+                      linkClassName="block w-full h-full"
+                      className="w-full h-full object-cover"
+                    />
+                    {isLocalReceipt(url) && (
+                      <span className="absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                        Not uploaded
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      aria-label={`Remove receipt ${index + 1}`}
+                      onClick={() => removeReceipt(index)}
+                      className="absolute top-1 right-1 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-red-500"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                {pending.map((item) => (
+                  <div key={item.id} className="relative aspect-[3/4] rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                    <img src={item.preview} alt="" className="w-full h-full object-cover opacity-50" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Hidden buttons don't take a column, so the visible ones always share the full width */}
+            <div className="grid grid-flow-col auto-cols-fr gap-2">
+              {/* Only shown on touch devices, where a camera is likely */}
+              <button
+                type="button"
+                onClick={() => openPicker('camera')}
+                className={`${receiptActionClass} hidden [@media(pointer:coarse)]:flex`}
+              >
+                <Camera className="w-5 h-5" />
+                Camera
+              </button>
+              <button type="button" onClick={() => openPicker('upload')} className={`${receiptActionClass} flex`}>
+                <Upload className="w-5 h-5" />
+                Upload
+              </button>
+            </div>
+          </div>
         </form>
       </div>
 
