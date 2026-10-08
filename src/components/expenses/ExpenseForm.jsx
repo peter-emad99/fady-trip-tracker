@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
-import { X, Upload, Camera, Calendar, Tag, User } from 'lucide-react';
+import { X, Upload, Camera, ScanLine, Calendar, Tag, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +11,9 @@ import { supabase } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
 import { uploadReceipt, deleteReceipt, organizeReceipts, isDriveReceipt } from '@/api/receiptStorage';
 import { toast } from '@/components/ui/use-toast';
+import { loadOpenCV } from '@/lib/docScanner';
+
+const ReceiptScanner = React.lazy(() => import('./ReceiptScanner'));
 
 export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose, onSuccess }) {
   const { user } = useAuth();
@@ -30,6 +33,8 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       const [uploading, setUploading] = React.useState(false);
       const fileInputRef = React.useRef(null);
       const cameraInputRef = React.useRef(null);
+      const scanInputRef = React.useRef(null);
+      const [scanFile, setScanFile] = React.useState(null);
       const [budgets, setBudgets] = React.useState([]);
 
       // Fetch trip budgets
@@ -48,8 +53,7 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       // Generate a consistent ID for new expenses to allow file association before save
       const expenseId = useMemo(() => expenseToEdit?.id || crypto.randomUUID(), [expenseToEdit]);
 
-      const handleFileUpload = async (e) => {
-      const files = Array.from(e.target.files);
+      const uploadFiles = async (files) => {
       if (!files.length) return;
 
       setUploading(true);
@@ -72,9 +76,30 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       }
       } finally {
       setUploading(false);
+      }
+      };
+
+      const handleFileUpload = (e) => {
+      uploadFiles(Array.from(e.target.files));
       // Reset input so same files can be selected again if needed
       e.target.value = '';
-      }
+      };
+
+      const handleScanClick = () => {
+      // Start downloading OpenCV now so it's (mostly) ready by the time the photo is taken
+      loadOpenCV().catch(() => {});
+      scanInputRef.current?.click();
+      };
+
+      const handleScanPicked = (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (file) setScanFile(file);
+      };
+
+      const handleScanDone = (file) => {
+      setScanFile(null);
+      uploadFiles([file]);
       };
 
       const removeReceipt = async (indexToRemove) => {
@@ -272,6 +297,19 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
               ref={cameraInputRef}
               onChange={handleFileUpload}
             />
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              ref={scanInputRef}
+              onChange={handleScanPicked}
+            />
+            {scanFile && (
+              <React.Suspense fallback={null}>
+                <ReceiptScanner file={scanFile} onDone={handleScanDone} onCancel={() => setScanFile(null)} />
+              </React.Suspense>
+            )}
 
             <div className="grid grid-cols-3 gap-3">
               {receiptUrls.map((url, index) => (
@@ -304,6 +342,24 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
                       <>
                           <Camera className="w-6 h-6 text-indigo-500" />
                           <span className="text-[10px] text-indigo-600 font-medium">Camera</span>
+                      </>
+                  )}
+              </Button>
+
+              {/* Camera photo + edge crop + cleanup; on desktop it opens the file picker instead */}
+              <Button
+                  type="button"
+                  variant="outline"
+                  className="aspect-square flex flex-col gap-1 border-dashed border-2 hover:border-indigo-400 hover:bg-indigo-50"
+                  onClick={handleScanClick}
+                  disabled={uploading}
+              >
+                  {uploading ? (
+                      <span className="animate-spin">⏳</span>
+                  ) : (
+                      <>
+                          <ScanLine className="w-6 h-6 text-indigo-500" />
+                          <span className="text-[10px] text-indigo-600 font-medium">Scan</span>
                       </>
                   )}
               </Button>
