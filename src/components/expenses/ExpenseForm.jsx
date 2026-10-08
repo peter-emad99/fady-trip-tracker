@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
+import { uploadReceipt, deleteReceipt } from '@/api/receiptStorage';
+import { toast } from '@/components/ui/use-toast';
 
 export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose, onSuccess }) {
   const { user } = useAuth();
@@ -51,29 +53,22 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
 
       setUploading(true);
       try {
-      const uploadPromises = files.map(async (file) => {
-        const fileExt = file.name.split('.').pop();
-        // Prefix filename with expenseId
-        const fileName = `${expenseId}_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const filePath = `${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('receipts')
-          .upload(filePath, file);
-
-        if (uploadError) throw uploadError;
-
-        const { data } = supabase.storage.from('receipts').getPublicUrl(filePath);
-        return { file_url: data.publicUrl };
-      });
-
-      const results = await Promise.all(uploadPromises);
-      const newUrls = results.map(r => r.file_url);
+      // allSettled so receipts that did upload are kept even if another one fails
+      const results = await Promise.allSettled(files.map((file) => uploadReceipt(file, expenseId)));
+      const newUrls = results.filter(r => r.status === 'fulfilled').map(r => r.value);
+      const failed = results.filter(r => r.status === 'rejected');
 
       const currentUrls = getValues('receipt_urls') || [];
       setValue('receipt_urls', [...currentUrls, ...newUrls]);
-      } catch (error) {
-      console.error('Upload failed', error);
+
+      if (failed.length) {
+        console.error('Upload failed', failed.map(r => r.reason));
+        toast({
+          variant: 'destructive',
+          title: `${failed.length} receipt${failed.length > 1 ? 's' : ''} failed to upload`,
+          description: failed[0].reason?.message,
+        });
+      }
       } finally {
       setUploading(false);
       // Reset input so same files can be selected again if needed
@@ -87,18 +82,9 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
 
       if (urlToRemove) {
         try {
-          // Extract the file path from the public URL
-          // Format: .../receipts/<filename>
-          const path = urlToRemove.split('/receipts/').pop();
-          if (path) {
-            const { error } = await supabase.storage.from('receipts').remove([path]);
-            if (error) {
-              console.error('Failed to delete file from storage', error);
-              // We continue to remove it from UI even if storage delete fails
-              // to prevent UI from being stuck
-            }
-          }
+          await deleteReceipt(urlToRemove);
         } catch (err) {
+          // Still remove it from the UI so the form doesn't get stuck
           console.error('Error removing receipt:', err);
         }
       }

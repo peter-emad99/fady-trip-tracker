@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase } from "@/api/supabaseClient";
 import { useAuth } from "@/lib/AuthContext";
+import { deleteReceipt } from "@/api/receiptStorage";
 import { format } from "date-fns";
 import {
   Plus,
@@ -105,12 +106,7 @@ export default function TripDetails() {
 
         for (const url of urlsToDelete) {
           try {
-            // Extract file path from URL
-            const urlParts = url.split("/receipts/");
-            if (urlParts.length > 1) {
-              const filePath = urlParts[1].split("?")[0]; // Remove query params
-              await supabase.storage.from("receipts").remove([filePath]);
-            }
+            await deleteReceipt(url);
           } catch (err) {
             console.error("Failed to delete receipt file:", err);
           }

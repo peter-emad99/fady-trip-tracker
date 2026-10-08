@@ -1,490 +1,154 @@
-# Google Drive File Storage Migration Plan
+# Google Drive Receipt Storage & Usage Monitoring
 
-## Overview
+Receipts are stored in **one Google Drive account** (the "Drive owner") instead of Supabase Storage.
+That account doesn't have to be yours, and it doesn't have to own the Google Cloud project; it's
+whichever account approves access in step 3 below. App users never sign in to Drive themselves.
+The browser never talks to Google directly — small Vercel functions in `/api` do:
 
-This document outlines the plan to migrate from Supabase Storage to Google Drive for receipt file storage.
+| Endpoint | What it does |
+| --- | --- |
+| `POST /api/receipts?name=…` | Uploads an image to the `Trippy Receipts` folder (requires Supabase login) |
+| `GET /api/receipts?id=…` | Streams a receipt image (used as `<img src>` and by the PDF export) |
+| `DELETE /api/receipts?id=…` | Moves a receipt to the Drive trash (requires Supabase login) |
+| `GET /api/usage` | Drive quota + receipts folder size, for the Usage page (admins only) |
+| `GET /api/google/connect` | One-time link the Drive owner opens to approve access |
+| `GET /api/google/callback` | Google sends the owner back here; shows the refresh token to copy |
 
----
+Expenses store receipt URLs like `/api/receipts?id=<driveFileId>`. Old Supabase URLs keep
+working and can still be deleted. Files stay **private** in Drive; the app only uses the
+`drive.file` scope, so it can only see files it created.
 
-## Why Google Drive?
-
-### Advantages
-
-- **15 GB free storage** (vs 1 GB on Supabase free tier)
-- **Familiar interface** - users can access files directly
-- **Better long-term storage** - files persist even if app is inactive
-- **Shared folders** - easier collaboration
-- **No bandwidth limits** on free tier
-
-### Disadvantages
-
-- More complex authentication flow
-- Requires Google account
-- Slightly slower upload/download
-- Need to manage OAuth tokens
+Images are resized in the browser (max 2000px, JPEG) before upload, keeping them under
+Vercel's 4.5 MB request limit.
 
 ---
 
-## Implementation Plan
+## One-time setup
 
-### Phase 1: Setup Google Drive API
+**Who does what:** you do steps 1, 2, 4, 5, 6 and 7. The Drive owner only does step 3, using
+[docs/CONNECT_GOOGLE_DRIVE.md](docs/CONNECT_GOOGLE_DRIVE.md). Send them that file and the link.
 
-#### 1.1 Create Google Cloud Project
+### 1. Google Cloud OAuth client (you)
+
+Use any Google account for this. You can reuse the Google Cloud project you already use for
+Supabase Google sign-in.
+
+1. https://console.cloud.google.com → **APIs & Services → Library** → enable **Google Drive API**.
+2. **APIs & Services → OAuth consent screen** (now called *Google Auth Platform*):
+   - App name: **Trippy** (the Drive owner sees this name on Google's screen)
+   - **Data access → Add scopes** → `.../auth/drive.file`
+   - **Audience → Publishing status → Publish app** (set to **In production**)
+   > ⚠️ If it stays in "Testing", the connection expires after 7 days and uploads stop, and the Drive owner
+   > would also have to be added as a test user. `drive.file` is a non-sensitive scope, so publishing
+   > needs no Google review.
+3. **Credentials → Create credentials → OAuth client ID** (or edit the existing web client)
+   - Type: **Web application**
+   - Authorized redirect URI: `https://fady-trip-tracker.vercel.app/api/google/callback`
+4. Copy the **Client ID** and **Client secret**.
+
+### 2. Add the client to Vercel and deploy (you)
+
+Vercel → Project → Settings → Environment Variables (Production):
 
 ```bash
-# Steps:
-1. Go to https://console.cloud.google.com
-2. Create new project: "Fady Trip Tracker"
-3. Enable Google Drive API:
-   - Go to "APIs & Services" → "Library"
-   - Search "Google Drive API"
-   - Click "Enable"
+GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=xxxx
 ```
 
-#### 1.2 Create OAuth 2.0 Credentials
+Do **not** prefix these with `VITE_`, because that would send the secret to the browser.
+`VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (already set) are reused to check logins.
+Then deploy (push to `main`, or Redeploy in Vercel).
+
+### 3. Drive owner approves access (the other person)
+
+Send them [docs/CONNECT_GOOGLE_DRIVE.md](docs/CONNECT_GOOGLE_DRIVE.md) and this link:
+
+```
+https://fady-trip-tracker.vercel.app/api/google/connect
+```
+
+They sign in with the big-storage account, click Allow, and send you the code the page shows.
+The page also shows the account email and its storage, so you can both confirm it's the right account.
+
+### 4. Add the refresh token and redeploy (you)
 
 ```bash
-# Steps:
-1. Go to "APIs & Services" → "Credentials"
-2. Click "Create Credentials" → "OAuth client ID"
-3. Application type: "Web application"
-4. Authorized JavaScript origins:
-   - http://localhost:5173 (development)
-   - https://your-app.vercel.app (production)
-5. Authorized redirect URIs:
-   - http://localhost:5173/auth/callback
-   - https://your-app.vercel.app/auth/callback
-6. Save Client ID and Client Secret
+GOOGLE_REFRESH_TOKEN=<the code they sent>
+# optional; otherwise a "Trippy Receipts" folder is found or created automatically
+GOOGLE_DRIVE_FOLDER_ID=
 ```
 
-#### 1.3 Configure OAuth Consent Screen
+Redeploy so the function picks it up.
+
+> **Pick the account carefully.** The app can only see files it uploaded with this account's token.
+> Switching to another account later means existing Drive receipts stop loading unless they're moved.
+
+### 5. Run the database migrations (you)
+
+In the Supabase **SQL Editor**, run these two files **in order**:
+
+1. [`supabase/migrations/20261008000000_usage_stats.sql`](supabase/migrations/20261008000000_usage_stats.sql)
+2. [`supabase/migrations/20261009000000_admin_profiles.sql`](supabase/migrations/20261009000000_admin_profiles.sql)
+
+The second creates a `profiles` table (one row per user, filled automatically) with an `is_admin`
+column, and limits the usage stats to admins.
+
+### 6. Make yourself admin (you)
+
+Supabase → **Table Editor → profiles** → tick **is_admin** on your row (and anyone else who should
+see the Usage page). Nobody can change this from inside the app. Reload the app to see the gauge icon.
+
+### 7. Test
+
+- Add an expense with a receipt photo, then check the **Trippy Receipts** folder in the Drive owner's account.
+- Open the receipt in the app, export the trip PDF, then delete the receipt.
+- Open the **Usage** page (gauge icon). A non-admin account should not see the icon, and gets
+  "Only admins can see this page" if they open `/Usage` directly.
+
+<details>
+<summary>Alternative to step 3: OAuth Playground</summary>
+
+If you're doing it on the Drive owner's computer yourself: add `https://developers.google.com/oauthplayground`
+as a redirect URI, open the playground, ⚙️ → **Use your own OAuth credentials**, authorize the scope
+`https://www.googleapis.com/auth/drive.file` while signed in as the Drive owner, then
+**Exchange authorization code for tokens** and copy the refresh token.
+</details>
+
+---
+
+## Local development
+
+`npm run dev` (plain Vite) doesn't run the `/api` functions. Either:
 
 ```bash
-# Steps:
-1. Go to "OAuth consent screen"
-2. User Type: "External"
-3. App name: "Fady Trip Tracker"
-4. User support email: your email
-5. Scopes: Add "Google Drive API" → "../auth/drive.file"
-6. Test users: Add your email
+npx vercel dev
 ```
 
----
-
-### Phase 2: Install Dependencies
+(with the env vars in `.env` / pulled via `vercel env pull`), or proxy `/api` to a deployment:
 
 ```bash
-npm install @react-oauth/google gapi-script
-```
-
-**Package purposes:**
-
-- `@react-oauth/google` - Google OAuth login
-- `gapi-script` - Google API client library
-
----
-
-### Phase 3: Code Implementation
-
-#### 3.1 Create Google Drive Service
-
-**File:** `src/api/googleDriveService.js`
-
-```javascript
-import { gapi } from "gapi-script";
-
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
-const SCOPES = "https://www.googleapis.com/auth/drive.file";
-
-// Folder name in Google Drive
-const FOLDER_NAME = "TripTracker_Receipts";
-
-class GoogleDriveService {
-  constructor() {
-    this.folderId = null;
-  }
-
-  // Initialize Google API
-  async init() {
-    return new Promise((resolve, reject) => {
-      gapi.load("client:auth2", async () => {
-        try {
-          await gapi.client.init({
-            apiKey: API_KEY,
-            clientId: CLIENT_ID,
-            discoveryDocs: [
-              "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest",
-            ],
-            scope: SCOPES,
-          });
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      });
-    });
-  }
-
-  // Sign in to Google
-  async signIn() {
-    const auth = gapi.auth2.getAuthInstance();
-    if (!auth.isSignedIn.get()) {
-      await auth.signIn();
-    }
-    await this.ensureFolder();
-  }
-
-  // Create or get receipts folder
-  async ensureFolder() {
-    if (this.folderId) return this.folderId;
-
-    // Search for existing folder
-    const response = await gapi.client.drive.files.list({
-      q: `name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-      fields: "files(id, name)",
-    });
-
-    if (response.result.files.length > 0) {
-      this.folderId = response.result.files[0].id;
-    } else {
-      // Create folder
-      const folderMetadata = {
-        name: FOLDER_NAME,
-        mimeType: "application/vnd.google-apps.folder",
-      };
-      const folder = await gapi.client.drive.files.create({
-        resource: folderMetadata,
-        fields: "id",
-      });
-      this.folderId = folder.result.id;
-    }
-
-    return this.folderId;
-  }
-
-  // Upload file to Google Drive
-  async uploadFile(file, fileName) {
-    await this.ensureFolder();
-
-    const metadata = {
-      name: fileName,
-      parents: [this.folderId],
-    };
-
-    const form = new FormData();
-    form.append(
-      "metadata",
-      new Blob([JSON.stringify(metadata)], { type: "application/json" }),
-    );
-    form.append("file", file);
-
-    const response = await fetch(
-      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,webContentLink",
-      {
-        method: "POST",
-        headers: new Headers({
-          Authorization: "Bearer " + gapi.auth.getToken().access_token,
-        }),
-        body: form,
-      },
-    );
-
-    const result = await response.json();
-
-    // Make file publicly accessible
-    await gapi.client.drive.permissions.create({
-      fileId: result.id,
-      resource: {
-        role: "reader",
-        type: "anyone",
-      },
-    });
-
-    // Return direct link
-    return `https://drive.google.com/uc?export=view&id=${result.id}`;
-  }
-
-  // Delete file from Google Drive
-  async deleteFile(fileUrl) {
-    // Extract file ID from URL
-    const fileId = fileUrl.match(/id=([^&]+)/)?.[1];
-    if (!fileId) return;
-
-    try {
-      await gapi.client.drive.files.delete({
-        fileId: fileId,
-      });
-    } catch (error) {
-      console.error("Failed to delete file from Google Drive:", error);
-    }
-  }
-
-  // Check if user is signed in
-  isSignedIn() {
-    const auth = gapi.auth2.getAuthInstance();
-    return auth?.isSignedIn.get() || false;
-  }
-
-  // Sign out
-  async signOut() {
-    const auth = gapi.auth2.getAuthInstance();
-    await auth.signOut();
-  }
-}
-
-export const googleDriveService = new GoogleDriveService();
-```
-
-#### 3.2 Update ExpenseForm.jsx
-
-Replace Supabase upload with Google Drive:
-
-```javascript
-// In ExpenseForm.jsx
-
-import { googleDriveService } from "@/api/googleDriveService";
-
-const handleFileUpload = async (files) => {
-  try {
-    setUploading(true);
-
-    // Ensure user is signed in to Google
-    if (!googleDriveService.isSignedIn()) {
-      await googleDriveService.signIn();
-    }
-
-    const uploadPromises = Array.from(files).map(async (file) => {
-      const fileName = `${Date.now()}_${file.name}`;
-      const fileUrl = await googleDriveService.uploadFile(file, fileName);
-      return { file_url: fileUrl };
-    });
-
-    const results = await Promise.all(uploadPromises);
-    const newUrls = results.map((r) => r.file_url);
-
-    const currentUrls = getValues("receipt_urls") || [];
-    setValue("receipt_urls", [...currentUrls, ...newUrls]);
-  } catch (error) {
-    console.error("Upload failed", error);
-    toast.error("Failed to upload receipt");
-  } finally {
-    setUploading(false);
-  }
-};
-```
-
-#### 3.3 Update TripDetails.jsx Delete Function
-
-```javascript
-// In TripDetails.jsx
-
-import { googleDriveService } from "@/api/googleDriveService";
-
-const deleteExpenseMutation = useMutation({
-  mutationFn: async (expenseId) => {
-    // Get expense to retrieve receipt URLs
-    const { data: expense } = await supabase
-      .from("expenses")
-      .select("receipt_urls, receipt_url")
-      .eq("id", expenseId)
-      .single();
-
-    // Delete receipt files from Google Drive
-    if (expense) {
-      const urlsToDelete =
-        expense.receipt_urls ||
-        (expense.receipt_url ? [expense.receipt_url] : []);
-
-      for (const url of urlsToDelete) {
-        try {
-          await googleDriveService.deleteFile(url);
-        } catch (err) {
-          console.error("Failed to delete receipt file:", err);
-        }
-      }
-    }
-
-    // Delete the expense record
-    const { error } = await supabase
-      .from("expenses")
-      .delete()
-      .eq("id", expenseId);
-    if (error) throw error;
-  },
-  onSuccess: () =>
-    queryClient.invalidateQueries({ queryKey: ["expenses", id] }),
-});
-```
-
-#### 3.4 Add Google Sign-In Button
-
-**File:** `src/components/GoogleDriveAuth.jsx`
-
-```javascript
-import { useEffect, useState } from "react";
-import { googleDriveService } from "@/api/googleDriveService";
-import { Button } from "@/components/ui/button";
-
-export default function GoogleDriveAuth() {
-  const [isSignedIn, setIsSignedIn] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const initGoogleDrive = async () => {
-      try {
-        await googleDriveService.init();
-        setIsSignedIn(googleDriveService.isSignedIn());
-      } catch (error) {
-        console.error("Failed to initialize Google Drive:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initGoogleDrive();
-  }, []);
-
-  const handleSignIn = async () => {
-    try {
-      await googleDriveService.signIn();
-      setIsSignedIn(true);
-    } catch (error) {
-      console.error("Sign in failed:", error);
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await googleDriveService.signOut();
-      setIsSignedIn(false);
-    } catch (error) {
-      console.error("Sign out failed:", error);
-    }
-  };
-
-  if (loading) return null;
-
-  return (
-    <div className="flex items-center gap-2">
-      {isSignedIn ? (
-        <Button variant="outline" size="sm" onClick={handleSignOut}>
-          Sign out of Google Drive
-        </Button>
-      ) : (
-        <Button variant="outline" size="sm" onClick={handleSignIn}>
-          Connect Google Drive
-        </Button>
-      )}
-    </div>
-  );
-}
+API_PROXY_TARGET=https://your-app.vercel.app npm run dev
 ```
 
 ---
 
-### Phase 4: Environment Variables
+## Usage page
 
-Add to `.env` and Vercel/Netlify:
+The gauge icon in the top bar opens `/Usage`. It's only shown to users with `profiles.is_admin = true`,
+and the database function and `/api/usage` both check the flag too. The page shows:
 
-```bash
-VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-VITE_GOOGLE_API_KEY=your-api-key
-```
+- **Database** — size vs the 500 MB free-plan limit, plus rows and size per table
+- **Google Drive** — used vs your account quota (shared with Gmail & Photos), receipts folder size, trash size
+- **Supabase Storage** — older receipts still in Supabase vs the 1 GB limit
 
----
-
-### Phase 5: Migration Strategy
-
-#### Option A: Hard Cutover (Recommended for new apps)
-
-1. Deploy Google Drive version
-2. All new uploads go to Google Drive
-3. Old Supabase files remain accessible (read-only)
-
-#### Option B: Gradual Migration
-
-1. Keep both systems running
-2. Add feature flag to choose storage provider
-3. Migrate old files in background
-4. Switch to Google Drive only after migration
-
-#### Option C: Dual Storage (Most Complex)
-
-1. Upload to both Supabase and Google Drive
-2. Gradually phase out Supabase
-3. Highest reliability but more complex
+Bars turn amber at 75% and red at 90%. Bandwidth (egress) and monthly active users aren't
+available from inside the app — check those in the Supabase dashboard.
 
 ---
 
-### Phase 6: Testing Checklist
+## Notes
 
-- [ ] Google OAuth flow works
-- [ ] Files upload to correct folder
-- [ ] Files are publicly accessible
-- [ ] File deletion works
-- [ ] Multiple file upload works
-- [ ] Works on mobile browsers
-- [ ] Works in production (not just localhost)
-- [ ] Token refresh works (for long sessions)
-
----
-
-### Phase 7: Rollback Plan
-
-If Google Drive integration fails:
-
-1. **Immediate:** Revert to Supabase storage
-2. **Keep both:** Maintain dual storage temporarily
-3. **Data safety:** All URLs stored in database remain valid
-
----
-
-## Estimated Timeline
-
-- **Phase 1-2:** 1-2 hours (Google Cloud setup)
-- **Phase 3:** 3-4 hours (Code implementation)
-- **Phase 4-5:** 1 hour (Environment setup)
-- **Phase 6:** 2-3 hours (Testing)
-
-**Total:** ~8-12 hours
-
----
-
-## Cost Comparison
-
-| Feature         | Supabase Free | Google Drive Free  |
-| --------------- | ------------- | ------------------ |
-| Storage         | 1 GB          | 15 GB              |
-| Bandwidth       | 2 GB/month    | Unlimited\*        |
-| File size limit | 50 MB         | 5 TB               |
-| API calls       | Unlimited     | 1000/day (queries) |
-
-\*Reasonable use policy applies
-
----
-
-## Security Considerations
-
-1. **OAuth tokens:** Store securely, refresh automatically
-2. **File permissions:** Set to "anyone with link" (read-only)
-3. **Folder isolation:** Each user could have separate folder
-4. **Audit logs:** Google Drive provides access logs
-
----
-
-## Future Enhancements
-
-1. **User-specific folders:** Each user gets their own folder
-2. **Shared trips:** Multiple users can access same receipts
-3. **Offline support:** Cache files locally
-4. **Bulk operations:** Upload/download multiple files at once
-5. **File versioning:** Keep history of receipt updates
-
----
-
-## Support & Resources
-
-- [Google Drive API Docs](https://developers.google.com/drive/api/v3/about-sdk)
-- [OAuth 2.0 Guide](https://developers.google.com/identity/protocols/oauth2)
-- [React Google OAuth](https://www.npmjs.com/package/@react-oauth/google)
+- Deleted receipts go to the Drive trash (recoverable for 30 days) and still count toward the quota until the trash is emptied.
+- Receipt image URLs don't need a login (they're used directly in `<img>` tags), the same as the old public Supabase bucket — but Drive file ids are long and unguessable.
+- Existing receipts are **not** moved from Supabase; new uploads go to Drive. The Supabase Storage card stays on the Usage page until they are.
+- The connect link can be opened by anyone, but it only shows the token for the account *they* sign in with. The app only uses `GOOGLE_REFRESH_TOKEN` from Vercel, so it's harmless.

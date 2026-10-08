@@ -24,6 +24,18 @@ export const AuthProvider = ({ children }) => {
   }, []);
   
   const isAuthenticated = !!user;
+
+  // Admin flag lives in public.profiles and is edited by hand in Supabase.
+  // null = still checking.
+  const [isAdmin, setIsAdmin] = useState(null);
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
+    setIsAdmin(null);
+    supabase.rpc('is_admin').then(({ data, error }) => setIsAdmin(!error && data === true));
+  }, [user?.id]);
   
   const login = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
@@ -43,6 +55,7 @@ export const AuthProvider = ({ children }) => {
   const value = {
     user,
     isAuthenticated,
+    isAdmin,
     isLoadingAuth,
     isLoadingPublicSettings: false, // Keeping interface consistent
     authError: null,
