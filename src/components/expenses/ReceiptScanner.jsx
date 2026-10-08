@@ -1,28 +1,54 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, ArrowLeft, Wand2, Loader2 } from 'lucide-react';
+import { X, Check, Crop, RotateCcw, Camera, Wand2, Loader2, Maximize } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { loadOpenCV, fileToCanvas, detectCorners, extractDocument, canvasToBlob } from '@/lib/docScanner';
+import { loadOpenCV, fileToCanvas, detectCorners, fullImageCorners, extractDocument, canvasToBlob } from '@/lib/docScanner';
 
-// Full-screen scanner: finds the receipt edges, lets the user drag the corners,
-// then crops/straightens (and optionally cleans up) the image.
-export default function ReceiptScanner({ file, onDone, onCancel }) {
-  const [stage, setStage] = React.useState('loading'); // loading | adjust | processing | preview | error
+const LOUPE_SIZE = 120; // px on screen
+
+// Full-screen scanner: finds the receipt edges, crops/straightens (and optionally cleans up)
+// the photo and shows the result. If the crop is off, Edit lets the user drag the corners.
+export default function ReceiptScanner({ file, onDone, onRetake, onCancel }) {
+  const [stage, setStage] = React.useState('loading'); // loading | preview | edit | error
+  const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [found, setFound] = React.useState(true);
   const [corners, setCorners] = React.useState(null);
+  const [draft, setDraft] = React.useState(null); // corners being edited
+  const [dragging, setDragging] = React.useState(null); // index of the corner being dragged
   const [enhance, setEnhance] = React.useState(true);
   const [photoUrl, setPhotoUrl] = React.useState(null);
   const [result, setResult] = React.useState(null); // { blob, url }
 
   const cvRef = React.useRef(null);
   const canvasRef = React.useRef(null);
+  const detectedRef = React.useRef(null);
   const svgRef = React.useRef(null);
-  const dragIndex = React.useRef(null);
+
+  const process = React.useCallback(async (nextCorners, nextEnhance) => {
+    setBusy(true);
+    // Let the spinner paint before OpenCV blocks the main thread
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    try {
+      const output = extractDocument(cvRef.current, canvasRef.current, nextCorners, { enhance: nextEnhance });
+      const blob = await canvasToBlob(output);
+      setResult({ blob, url: URL.createObjectURL(blob) });
+      setStage('preview');
+    } catch (err) {
+      console.error('Scan processing failed', err);
+      setError(err.message || 'Could not process the image');
+      setStage('error');
+    } finally {
+      setBusy(false);
+    }
+  }, []);
 
   React.useEffect(() => {
     let cancelled = false;
     let url;
+    setStage('loading');
+    setResult(null);
 
     (async () => {
       try {
@@ -33,8 +59,12 @@ export default function ReceiptScanner({ file, onDone, onCancel }) {
         url = URL.createObjectURL(await canvasToBlob(canvas, 0.85));
         if (cancelled) return URL.revokeObjectURL(url);
         setPhotoUrl(url);
-        setCorners(detectCorners(cv, canvas));
-        setStage('adjust');
+
+        const detection = detectCorners(cv, canvas);
+        detectedRef.current = detection;
+        setFound(detection.found);
+        setCorners(detection.corners);
+        await process(detection.corners, true);
       } catch (err) {
         console.error('Scanner failed', err);
         if (!cancelled) {
@@ -48,9 +78,25 @@ export default function ReceiptScanner({ file, onDone, onCancel }) {
       cancelled = true;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [file]);
+  }, [file, process]);
 
   React.useEffect(() => () => result && URL.revokeObjectURL(result.url), [result]);
+
+  const handleEnhanceChange = (value) => {
+    setEnhance(value);
+    process(corners, value);
+  };
+
+  const startEdit = () => {
+    setDraft(corners);
+    setStage('edit');
+  };
+
+  const applyEdit = () => {
+    setCorners(draft);
+    setFound(true);
+    process(draft, enhance);
+  };
 
   // Converts a pointer position into image pixel coordinates
   const toImagePoint = (e) => {
@@ -65,42 +111,37 @@ export default function ReceiptScanner({ file, onDone, onCancel }) {
 
   const handlePointerDown = (index) => (e) => {
     e.preventDefault();
-    dragIndex.current = index;
+    setDragging(index);
     svgRef.current.setPointerCapture(e.pointerId);
   };
 
   const handlePointerMove = (e) => {
-    if (dragIndex.current === null) return;
+    if (dragging === null) return;
     const point = toImagePoint(e);
-    setCorners((prev) => prev.map((c, i) => (i === dragIndex.current ? point : c)));
+    setDraft((prev) => prev.map((c, i) => (i === dragging ? point : c)));
   };
 
-  const handlePointerUp = () => { dragIndex.current = null; };
-
-  const handleAutoDetect = () => setCorners(detectCorners(cvRef.current, canvasRef.current));
-
-  const handleCrop = async () => {
-    setStage('processing');
-    // Let the spinner paint before OpenCV blocks the main thread
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    try {
-      const output = extractDocument(cvRef.current, canvasRef.current, corners, { enhance });
-      const blob = await canvasToBlob(output);
-      setResult({ blob, url: URL.createObjectURL(blob) });
-      setStage('preview');
-    } catch (err) {
-      console.error('Crop failed', err);
-      setError(err.message || 'Could not process the image');
-      setStage('error');
-    }
-  };
+  const handlePointerUp = () => setDragging(null);
 
   const handleUse = () => {
     onDone(new File([result.blob], `scan_${Date.now()}.jpg`, { type: 'image/jpeg' }));
   };
 
   const canvas = canvasRef.current;
-  const handleRadius = canvas ? Math.max(canvas.width, canvas.height) * 0.025 : 0;
+  const imageSize = canvas ? Math.max(canvas.width, canvas.height) : 0;
+  const handleRadius = imageSize * 0.022;
+  const polygonPoints = draft?.map((c) => `${c.x},${c.y}`).join(' ');
+  const dragPoint = dragging !== null && draft ? draft[dragging] : null;
+  const loupeSpan = imageSize * 0.08; // image pixels shown across the magnifier
+  // Keep the magnifier on the opposite side from the finger
+  const loupeOnRight = dragPoint && canvas && dragPoint.x < canvas.width / 2;
+
+  const headerText = {
+    loading: 'Scanning…',
+    preview: 'Your scan',
+    edit: 'Drag the corners to the receipt edges',
+    error: 'Scan',
+  }[stage];
 
   return createPortal(
     <div className="fixed inset-0 z-[60] bg-slate-950 text-white flex flex-col select-none">
@@ -108,9 +149,7 @@ export default function ReceiptScanner({ file, onDone, onCancel }) {
         <Button type="button" variant="ghost" size="icon" onClick={onCancel} className="rounded-full text-white hover:bg-white/10 hover:text-white">
           <X className="w-5 h-5" />
         </Button>
-        <span className="text-sm font-medium">
-          {stage === 'preview' ? 'Check the scan' : 'Drag the corners to the receipt edges'}
-        </span>
+        <span className="text-sm font-medium">{headerText}</span>
         <div className="w-10" />
       </div>
 
@@ -118,8 +157,8 @@ export default function ReceiptScanner({ file, onDone, onCancel }) {
         {stage === 'loading' && (
           <div className="flex flex-col items-center gap-3 text-slate-300">
             <Loader2 className="w-8 h-8 animate-spin" />
-            <p className="text-sm">Loading scanner…</p>
-            <p className="text-xs text-slate-500">First time can take a few seconds</p>
+            <p className="text-sm">Finding the receipt…</p>
+            <p className="text-xs text-slate-500">First scan can take a few seconds</p>
           </div>
         )}
 
@@ -130,77 +169,140 @@ export default function ReceiptScanner({ file, onDone, onCancel }) {
           </div>
         )}
 
-        {(stage === 'adjust' || stage === 'processing') && photoUrl && canvas && (
-          <svg
-            ref={svgRef}
-            viewBox={`0 0 ${canvas.width} ${canvas.height}`}
-            preserveAspectRatio="xMidYMid meet"
-            className="w-full h-full touch-none"
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-          >
-            <image href={photoUrl} width={canvas.width} height={canvas.height} />
-            <polygon
-              points={corners.map((c) => `${c.x},${c.y}`).join(' ')}
-              fill="rgba(99,102,241,0.18)"
-              stroke="#818cf8"
-              strokeWidth={handleRadius * 0.25}
-              strokeLinejoin="round"
-            />
-            {corners.map((c, i) => (
-              <circle
-                key={i}
-                cx={c.x}
-                cy={c.y}
-                r={handleRadius}
-                fill="rgba(255,255,255,0.9)"
-                stroke="#6366f1"
-                strokeWidth={handleRadius * 0.3}
-                className="cursor-grab"
-                onPointerDown={handlePointerDown(i)}
-              />
-            ))}
-          </svg>
+        {stage === 'preview' && result && (
+          <>
+            <img src={result.url} alt="Scanned receipt" className="max-w-full max-h-full object-contain rounded-md bg-white shadow-2xl" />
+            {!found && !busy && (
+              <div className="absolute top-2 inset-x-4 mx-auto max-w-sm rounded-lg bg-amber-500/95 px-3 py-2 text-center text-xs font-medium text-slate-950 shadow-lg">
+                Couldn't find the receipt edges. Tap Edit to crop it.
+              </div>
+            )}
+          </>
         )}
 
-        {stage === 'processing' && (
+        {stage === 'edit' && photoUrl && canvas && draft && (
+          <>
+            <svg
+              ref={svgRef}
+              viewBox={`0 0 ${canvas.width} ${canvas.height}`}
+              preserveAspectRatio="xMidYMid meet"
+              className="w-full h-full touch-none"
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+            >
+              <defs>
+                <mask id="scan-crop-mask">
+                  <rect width={canvas.width} height={canvas.height} fill="white" />
+                  <polygon points={polygonPoints} fill="black" />
+                </mask>
+              </defs>
+              <image href={photoUrl} width={canvas.width} height={canvas.height} />
+              {/* Dim everything outside the crop */}
+              <rect width={canvas.width} height={canvas.height} fill="rgba(2,6,23,0.55)" mask="url(#scan-crop-mask)" />
+              <polygon
+                points={polygonPoints}
+                fill="none"
+                stroke="#818cf8"
+                strokeWidth={handleRadius * 0.22}
+                strokeLinejoin="round"
+              />
+              {draft.map((c, i) => (
+                <g key={i} onPointerDown={handlePointerDown(i)} className="cursor-grab">
+                  {/* Larger invisible circle = easier to grab with a finger */}
+                  <circle cx={c.x} cy={c.y} r={handleRadius * 2.4} fill="transparent" />
+                  <circle
+                    cx={c.x}
+                    cy={c.y}
+                    r={handleRadius}
+                    fill={dragging === i ? 'rgba(129,140,248,0.35)' : 'rgba(255,255,255,0.25)'}
+                    stroke="white"
+                    strokeWidth={handleRadius * 0.25}
+                  />
+                </g>
+              ))}
+            </svg>
+
+            {dragPoint && (
+              <div
+                className={`pointer-events-none absolute top-4 ${loupeOnRight ? 'right-4' : 'left-4'} overflow-hidden rounded-full border-2 border-white shadow-2xl bg-slate-900`}
+                style={{ width: LOUPE_SIZE, height: LOUPE_SIZE }}
+              >
+                <svg
+                  viewBox={`${dragPoint.x - loupeSpan / 2} ${dragPoint.y - loupeSpan / 2} ${loupeSpan} ${loupeSpan}`}
+                  width={LOUPE_SIZE}
+                  height={LOUPE_SIZE}
+                >
+                  <image href={photoUrl} width={canvas.width} height={canvas.height} />
+                  <polygon points={polygonPoints} fill="none" stroke="#818cf8" strokeWidth={loupeSpan * 0.012} />
+                  <line x1={dragPoint.x - loupeSpan * 0.1} y1={dragPoint.y} x2={dragPoint.x + loupeSpan * 0.1} y2={dragPoint.y} stroke="white" strokeWidth={loupeSpan * 0.01} />
+                  <line x1={dragPoint.x} y1={dragPoint.y - loupeSpan * 0.1} x2={dragPoint.x} y2={dragPoint.y + loupeSpan * 0.1} stroke="white" strokeWidth={loupeSpan * 0.01} />
+                </svg>
+              </div>
+            )}
+          </>
+        )}
+
+        {busy && stage !== 'loading' && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40">
             <Loader2 className="w-8 h-8 animate-spin" />
           </div>
         )}
-
-        {stage === 'preview' && result && (
-          <img src={result.url} alt="Scanned receipt" className="max-w-full max-h-full object-contain rounded-md bg-white" />
-        )}
       </div>
 
-      {(stage === 'adjust' || stage === 'processing') && (
-        <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex items-center gap-3">
-          <Button type="button" variant="ghost" onClick={handleAutoDetect} className="text-white hover:bg-white/10 hover:text-white gap-1.5">
-            <Wand2 className="w-4 h-4" /> Auto
-          </Button>
-          <label className="flex items-center gap-2 text-sm text-slate-300">
-            <Switch checked={enhance} onCheckedChange={setEnhance} className="data-[state=checked]:bg-indigo-500 data-[state=unchecked]:bg-slate-600" />
-            Enhance
-          </label>
-          <Button type="button" onClick={handleCrop} disabled={stage === 'processing'} className="ml-auto bg-indigo-600 hover:bg-indigo-700">
-            Crop
+      {stage === 'preview' && (
+        <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4">
+          <div className="flex items-center justify-around">
+            <ToolButton icon={Crop} label="Edit" onClick={startEdit} disabled={busy} />
+            {onRetake && <ToolButton icon={Camera} label="Retake" onClick={onRetake} disabled={busy} />}
+            <label className="flex flex-col items-center gap-1.5 text-xs text-slate-300">
+              <Switch
+                checked={enhance}
+                onCheckedChange={handleEnhanceChange}
+                disabled={busy}
+                className="data-[state=checked]:bg-indigo-500 data-[state=unchecked]:bg-slate-600"
+              />
+              Enhance
+            </label>
+          </div>
+          <Button type="button" onClick={handleUse} disabled={busy} className="w-full h-12 text-base bg-indigo-600 hover:bg-indigo-700 gap-2">
+            <Check className="w-5 h-5" /> Use scan
           </Button>
         </div>
       )}
 
-      {stage === 'preview' && (
-        <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex items-center gap-3">
-          <Button type="button" variant="ghost" onClick={() => setStage('adjust')} className="text-white hover:bg-white/10 hover:text-white gap-1.5">
-            <ArrowLeft className="w-4 h-4" /> Adjust
-          </Button>
-          <Button type="button" onClick={handleUse} className="ml-auto bg-indigo-600 hover:bg-indigo-700 gap-1.5">
-            <Check className="w-4 h-4" /> Use scan
-          </Button>
+      {stage === 'edit' && (
+        <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4">
+          <div className="flex items-center justify-around">
+            <ToolButton icon={Wand2} label="Auto" onClick={() => setDraft(detectedRef.current.corners)} />
+            <ToolButton icon={Maximize} label="Full photo" onClick={() => setDraft(fullImageCorners(canvas.width, canvas.height))} />
+            <ToolButton icon={RotateCcw} label="Undo" onClick={() => setDraft(corners)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Button type="button" variant="ghost" onClick={() => setStage('preview')} className="h-12 text-white hover:bg-white/10 hover:text-white">
+              Cancel
+            </Button>
+            <Button type="button" onClick={applyEdit} disabled={busy} className="h-12 bg-indigo-600 hover:bg-indigo-700 gap-2">
+              <Check className="w-5 h-5" /> Apply
+            </Button>
+          </div>
         </div>
       )}
     </div>,
     document.body
+  );
+}
+
+function ToolButton({ icon: Icon, label, onClick, disabled }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex flex-col items-center gap-1.5 rounded-lg px-3 py-1 text-xs text-slate-300 transition-colors hover:text-white disabled:opacity-40"
+    >
+      <Icon className="w-5 h-5" />
+      {label}
+    </button>
   );
 }

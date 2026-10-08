@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
-import { X, Upload, Camera, ScanLine, Calendar, Tag, User } from 'lucide-react';
+import { X, Upload, Camera, ScanLine, Calendar, Tag, User, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,9 @@ import { toast } from '@/components/ui/use-toast';
 import { loadOpenCV } from '@/lib/docScanner';
 
 const ReceiptScanner = React.lazy(() => import('./ReceiptScanner'));
+
+const receiptActionClass =
+  'flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/60 py-3 text-xs font-medium text-indigo-600 transition-colors hover:border-indigo-400 hover:bg-indigo-50 active:bg-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400';
 
 export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose, onSuccess }) {
   const { user } = useAuth();
@@ -30,7 +33,8 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       }
       });
 
-      const [uploading, setUploading] = React.useState(false);
+      const [pending, setPending] = React.useState([]); // receipts still uploading: { id, preview }
+      const uploading = pending.length > 0;
       const fileInputRef = React.useRef(null);
       const cameraInputRef = React.useRef(null);
       const scanInputRef = React.useRef(null);
@@ -56,7 +60,9 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       const uploadFiles = async (files) => {
       if (!files.length) return;
 
-      setUploading(true);
+      // Show the local photos right away with a spinner while they upload
+      const items = files.map((file) => ({ id: crypto.randomUUID(), preview: URL.createObjectURL(file) }));
+      setPending((prev) => [...prev, ...items]);
       try {
       // allSettled so receipts that did upload are kept even if another one fails
       const results = await Promise.allSettled(files.map((file) => uploadReceipt(file, expenseId)));
@@ -75,7 +81,8 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
         });
       }
       } finally {
-      setUploading(false);
+      items.forEach((item) => URL.revokeObjectURL(item.preview));
+      setPending((prev) => prev.filter((item) => !items.includes(item)));
       }
       };
 
@@ -105,17 +112,16 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       const removeReceipt = async (indexToRemove) => {
       const currentUrls = getValues('receipt_urls') || [];
       const urlToRemove = currentUrls[indexToRemove];
+      // Remove it from the form right away; the file is deleted in the background
+      setValue('receipt_urls', currentUrls.filter((_, index) => index !== indexToRemove));
 
       if (urlToRemove) {
         try {
           await deleteReceipt(urlToRemove);
         } catch (err) {
-          // Still remove it from the UI so the form doesn't get stuck
           console.error('Error removing receipt:', err);
         }
       }
-
-      setValue('receipt_urls', currentUrls.filter((_, index) => index !== indexToRemove));
       };
 
   const onSubmit = async (data) => {
@@ -276,8 +282,13 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
 
           {/* Receipt Upload */}
           <div className="space-y-3">
-            <div className="flex justify-between items-end">
-              <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Receipts ({receiptUrls.length})</Label>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Receipts</Label>
+              {receiptUrls.length + pending.length > 0 && (
+                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-600">
+                  {receiptUrls.length + pending.length}
+                </span>
+              )}
             </div>
 
             <input
@@ -307,81 +318,64 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
             />
             {scanFile && (
               <React.Suspense fallback={null}>
-                <ReceiptScanner file={scanFile} onDone={handleScanDone} onCancel={() => setScanFile(null)} />
+                <ReceiptScanner
+                  file={scanFile}
+                  onDone={handleScanDone}
+                  onRetake={handleScanClick}
+                  onCancel={() => setScanFile(null)}
+                />
               </React.Suspense>
             )}
 
-            <div className="grid grid-cols-3 gap-3">
-              {receiptUrls.map((url, index) => (
-                  <div key={index} className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-50 group">
+            {receiptUrls.length + pending.length > 0 && (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {receiptUrls.map((url, index) => (
+                  <div key={url} className="relative aspect-[3/4] rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                    <a href={url} target="_blank" rel="noreferrer" className="block w-full h-full">
                       <img src={url} alt={`Receipt ${index + 1}`} className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
-                      <Button
-                          type="button"
-                          variant="destructive"
-                          size="icon"
-                          className="absolute top-1 right-1 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => removeReceipt(index)}
-                      >
-                          <X className="w-3 h-3" />
-                      </Button>
+                    </a>
+                    <button
+                      type="button"
+                      aria-label={`Remove receipt ${index + 1}`}
+                      onClick={() => removeReceipt(index)}
+                      className="absolute top-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-red-500"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
-              ))}
+                ))}
+                {pending.map((item) => (
+                  <div key={item.id} className="relative aspect-[3/4] rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                    <img src={item.preview} alt="" className="w-full h-full object-cover opacity-50" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
+            {/* Hidden buttons don't take a column, so the visible ones always share the full width */}
+            <div className="grid grid-flow-col auto-cols-fr gap-2">
               {/* Only shown on touch devices, where a camera is likely */}
-              <Button
-                  type="button"
-                  variant="outline"
-                  className="aspect-square hidden [@media(pointer:coarse)]:flex flex-col gap-1 border-dashed border-2 hover:border-indigo-400 hover:bg-indigo-50"
-                  onClick={() => cameraInputRef.current?.click()}
-                  disabled={uploading}
+              <button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                className={`${receiptActionClass} hidden [@media(pointer:coarse)]:flex`}
               >
-                  {uploading ? (
-                      <span className="animate-spin">⏳</span>
-                  ) : (
-                      <>
-                          <Camera className="w-6 h-6 text-indigo-500" />
-                          <span className="text-[10px] text-indigo-600 font-medium">Camera</span>
-                      </>
-                  )}
-              </Button>
-
+                <Camera className="w-5 h-5" />
+                Camera
+              </button>
               {/* Camera photo + edge crop + cleanup; on desktop it opens the file picker instead */}
-              <Button
-                  type="button"
-                  variant="outline"
-                  className="aspect-square flex flex-col gap-1 border-dashed border-2 hover:border-indigo-400 hover:bg-indigo-50"
-                  onClick={handleScanClick}
-                  disabled={uploading}
-              >
-                  {uploading ? (
-                      <span className="animate-spin">⏳</span>
-                  ) : (
-                      <>
-                          <ScanLine className="w-6 h-6 text-indigo-500" />
-                          <span className="text-[10px] text-indigo-600 font-medium">Scan</span>
-                      </>
-                  )}
-              </Button>
-
-              <Button
-                  type="button"
-                  variant="outline"
-                  className="aspect-square flex flex-col gap-1 border-dashed border-2 hover:border-indigo-400 hover:bg-indigo-50"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-              >
-                  {uploading ? (
-                      <span className="animate-spin">⏳</span>
-                  ) : (
-                      <>
-                          <Upload className="w-6 h-6 text-indigo-500" />
-                          <span className="text-[10px] text-indigo-600 font-medium">Upload</span>
-                      </>
-                  )}
-              </Button>
+              <button type="button" onClick={handleScanClick} className={`${receiptActionClass} flex`}>
+                <ScanLine className="w-5 h-5" />
+                Scan
+              </button>
+              <button type="button" onClick={() => fileInputRef.current?.click()} className={`${receiptActionClass} flex`}>
+                <Upload className="w-5 h-5" />
+                Upload
+              </button>
             </div>
-            {uploading && <p className="text-xs text-indigo-500 animate-pulse">Uploading receipts...</p>}
           </div>
 
         </form>
