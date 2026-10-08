@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { formatMoney, formatDate } from "@/lib/format";
 import {
   User,
-  MoreHorizontal,
   Image as ImageIcon,
   Pencil,
   Images,
@@ -31,12 +30,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -537,7 +530,7 @@ function ExpenseRow({ expense, colorKey, onEdit, onDelete }) {
 
   return (
     // The whole card opens the expense (a full-size button underneath); the receipt link and the
-    // menu sit above it and stay separately tappable.
+    // Edit / Delete buttons sit above it and stay separately tappable.
     <div className="relative flex gap-3 rounded-xl border border-gray-100 bg-card p-3 shadow-sm transition-shadow hover:shadow-md sm:p-4">
       <button
         type="button"
@@ -582,48 +575,69 @@ function ExpenseRow({ expense, colorKey, onEdit, onDelete }) {
           </span>
         </div>
 
-        {(expense.assigned_to || receipts.length > 0) && (
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-slate-500">
-            {expense.assigned_to && (
-              <span className="flex items-center gap-1 whitespace-nowrap">
-                <User className="h-3 w-3" /> {expense.assigned_to}
-              </span>
-            )}
-            {receipts.length > 0 && (
-              <Dialog>
-                <DialogTrigger asChild>
-                  <button className="pointer-events-auto relative -mx-1.5 -my-2 flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-2 text-indigo-600 transition-colors hover:text-indigo-700">
-                    {receipts.length > 1 ? (
-                      <Images className="h-3.5 w-3.5" />
-                    ) : (
-                      <ImageIcon className="h-3.5 w-3.5" />
-                    )}
-                    {receipts.length > 1
-                      ? `${receipts.length} receipts`
-                      : "Receipt"}
-                  </button>
-                </DialogTrigger>
-                <DialogContent className="max-w-3xl">
-                  <DialogTitle>Receipts · {expense.category}</DialogTitle>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {receipts.map((url, idx) => (
-                      <div
-                        key={url}
-                        className="overflow-hidden rounded-lg border border-gray-100 shadow-sm"
-                      >
-                        <ReceiptImage
-                          url={url}
-                          alt={`Receipt ${idx + 1}`}
-                          className="h-auto min-h-24 w-full object-contain"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </DialogContent>
-              </Dialog>
-            )}
+        {/* Details on the left, Edit / Delete on the right */}
+        <div className="mt-1 flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-slate-500">
+              {expense.assigned_to && (
+                <span className="flex items-center gap-1 whitespace-nowrap">
+                  <User className="h-3 w-3" /> {expense.assigned_to}
+                </span>
+              )}
+              {receipts.length > 0 && (
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <button className="pointer-events-auto relative -mx-1.5 -my-2 flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-2 text-indigo-600 transition-colors hover:text-indigo-700">
+                      {receipts.length > 1 ? (
+                        <Images className="h-3.5 w-3.5" />
+                      ) : (
+                        <ImageIcon className="h-3.5 w-3.5" />
+                      )}
+                      {receipts.length > 1
+                        ? `${receipts.length} receipts`
+                        : "Receipt"}
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-3xl">
+                    <DialogTitle>Receipts · {expense.category}</DialogTitle>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      {receipts.map((url, idx) => (
+                        <div
+                          key={url}
+                          className="overflow-hidden rounded-lg border border-gray-100 shadow-sm"
+                        >
+                          <ReceiptImage
+                            url={url}
+                            alt={`Receipt ${idx + 1}`}
+                            className="h-auto min-h-24 w-full object-contain"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
           </div>
-        )}
+          <div className="pointer-events-auto relative -my-1.5 -mr-1.5 flex shrink-0 items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Edit ${expense.category} expense`}
+              className="h-9 w-9 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600"
+              onClick={() => onEdit(expense)}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Delete ${expense.category} expense`}
+              className="h-9 w-9 text-slate-400 hover:bg-red-50 hover:text-red-600"
+              onClick={() => onDelete(expense.id)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
 
         {expense.notes && (
           <p
@@ -635,32 +649,6 @@ function ExpenseRow({ expense, colorKey, onEdit, onDelete }) {
         )}
       </div>
 
-      {/* Quick actions on larger screens; on phones, tap the card and use Delete in the form */}
-      <div className="relative hidden shrink-0 self-center sm:block">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`Actions for ${expense.category} expense`}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onEdit(expense)}>
-              <Pencil className="mr-2 h-4 w-4" /> Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="text-red-600 focus:text-red-600"
-              onClick={() => onDelete(expense.id)}
-            >
-              <Trash2 className="mr-2 h-4 w-4" /> Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
     </div>
   );
 }

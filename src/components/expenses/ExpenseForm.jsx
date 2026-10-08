@@ -567,7 +567,7 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, people 
       </div>
 
       <div className="flex gap-2 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-gray-100 bg-gray-50/50">
-        {/* On phones this is the way to delete (the list has no ⋯ menu there); Undo is offered after */}
+        {/* Asks for confirmation (in TripDetails); Undo is offered after */}
         {expenseToEdit && onDelete && (
           <Button
             type="button"

@@ -227,6 +227,22 @@ export default function TripDetails() {
     updateTripMutation.mutate(Object.fromEntries(formData));
   };
 
+  // Asks first; Undo is still offered for a few seconds after
+  const confirmDeleteExpense = (expense, afterDelete) =>
+    setConfirm({
+      title: "Delete this expense?",
+      description: `${formatMoney(expense.cost)} · ${expense.category}${
+        expense.receipt_urls?.length || expense.receipt_url
+          ? ". Its receipts will be deleted too."
+          : ""
+      }`,
+      confirmLabel: "Delete",
+      onConfirm: () => {
+        afterDelete?.();
+        deleteExpense(expense);
+      },
+    });
+
   const confirmDeleteTrip = () =>
     setConfirm({
       title: `Delete "${trip.name}"?`,
@@ -649,7 +665,7 @@ export default function TripDetails() {
             tripId={id}
             onDelete={(expenseId) => {
               const expense = expenses?.find((e) => e.id === expenseId);
-              if (expense) deleteExpense(expense);
+              if (expense) confirmDeleteExpense(expense);
             }}
             onEdit={(expense) => {
               setEditingExpense(expense);
@@ -703,10 +719,9 @@ export default function TripDetails() {
             categories={categories}
             expenseToEdit={editingExpense}
             people={people}
-            onDelete={(expense) => {
-              setShowExpenseForm(false);
-              deleteExpense(expense);
-            }}
+            onDelete={(expense) =>
+              confirmDeleteExpense(expense, () => setShowExpenseForm(false))
+            }
             onClose={() => setShowExpenseForm(false)}
             onSuccess={() => {
               invalidateTripData();
