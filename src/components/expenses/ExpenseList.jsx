@@ -455,10 +455,12 @@ export default function ExpenseList({
             </button>
           )}
         </span>
-        <span className="font-semibold text-slate-900">
-          {isFiltered ? "Filtered " : "Total "}
-          {formatMoney(filteredTotal)}
-        </span>
+        {/* Without filters this would repeat the Spent card, so the total only shows when filtered */}
+        {isFiltered && (
+          <span className="font-semibold text-slate-900">
+            Filtered {formatMoney(filteredTotal)}
+          </span>
+        )}
       </div>
 
       {filteredExpenses.length === 0 ? (
@@ -481,6 +483,9 @@ export default function ExpenseList({
               <div className="sticky top-[calc(4rem+env(safe-area-inset-top))] z-10 -mx-4 mb-2 flex items-baseline justify-between bg-gray-50/95 px-5 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 backdrop-blur sm:mx-0 sm:px-1">
                 <span>{date ? formatDate(date, "EEE, MMM d") : "No date"}</span>
                 <span className="normal-case tracking-normal">
+                  <span className="font-medium text-slate-400">
+                    {items.length} {items.length === 1 ? "expense" : "expenses"} ·{" "}
+                  </span>
                   {formatMoney(total)}
                 </span>
               </div>
