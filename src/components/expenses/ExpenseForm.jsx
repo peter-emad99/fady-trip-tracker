@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
-import { X, Upload, Camera, ScanLine, Calendar, Tag, User, Loader2 } from 'lucide-react';
+import { X, Upload, Camera, Calendar, Tag, User, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,7 +13,7 @@ import { uploadReceipt, deleteReceipt, organizeReceipts, isDriveReceipt } from '
 import { toast } from '@/components/ui/use-toast';
 import { loadOpenCV } from '@/lib/docScanner';
 
-const ReceiptScanner = React.lazy(() => import('./ReceiptScanner'));
+const ReceiptReview = React.lazy(() => import('./ReceiptReview'));
 
 const receiptActionClass =
   'flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/60 py-3 text-xs font-medium text-indigo-600 transition-colors hover:border-indigo-400 hover:bg-indigo-50 active:bg-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400';
@@ -37,8 +37,8 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       const uploading = pending.length > 0;
       const fileInputRef = React.useRef(null);
       const cameraInputRef = React.useRef(null);
-      const scanInputRef = React.useRef(null);
-      const [scanFile, setScanFile] = React.useState(null);
+      // Photos waiting for review: { files, index, source: 'camera' | 'upload', version }
+      const [review, setReview] = React.useState(null);
       const [budgets, setBudgets] = React.useState([]);
 
       // Fetch trip budgets
@@ -86,27 +86,38 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       }
       };
 
-      const handleFileUpload = (e) => {
-      uploadFiles(Array.from(e.target.files));
-      // Reset input so same files can be selected again if needed
-      e.target.value = '';
-      };
-
-      const handleScanClick = () => {
-      // Start downloading OpenCV now so it's (mostly) ready by the time the photo is taken
+      const openPicker = (source) => {
+      // Start downloading the scanner now so it's (mostly) ready by the time a photo is picked
       loadOpenCV().catch(() => {});
-      scanInputRef.current?.click();
+      (source === 'camera' ? cameraInputRef : fileInputRef).current?.click();
       };
 
-      const handleScanPicked = (e) => {
-      const file = e.target.files?.[0];
+      // Every photo goes through the review screen (scan or keep the original) before uploading
+      const handlePicked = (source) => (e) => {
+      const files = Array.from(e.target.files || []);
+      // Reset input so the same files can be picked again
       e.target.value = '';
-      if (file) setScanFile(file);
+      if (!files.length) return;
+      setReview((prev) => prev
+        // Retake / choose another: the new photo(s) replace the one being reviewed
+        ? { ...prev, files: [...prev.files.slice(0, prev.index), ...files, ...prev.files.slice(prev.index + 1)], version: prev.version + 1 }
+        : { files, index: 0, source, version: 0 });
       };
 
-      const handleScanDone = (file) => {
-      setScanFile(null);
+      const nextReview = () => {
+      setReview((prev) => (prev && prev.index + 1 < prev.files.length
+        ? { ...prev, index: prev.index + 1, version: prev.version + 1 }
+        : null));
+      };
+
+      const handleReviewUse = (file) => {
       uploadFiles([file]);
+      nextReview();
+      };
+
+      const handleUseAllOriginal = () => {
+      uploadFiles(review.files.slice(review.index));
+      setReview(null);
       };
 
       const removeReceipt = async (indexToRemove) => {
@@ -297,7 +308,7 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
               multiple
               className="hidden"
               ref={fileInputRef}
-              onChange={handleFileUpload}
+              onChange={handlePicked('upload')}
             />
             {/* capture opens the rear camera directly on phones; desktops ignore it */}
             <input
@@ -306,23 +317,21 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
               capture="environment"
               className="hidden"
               ref={cameraInputRef}
-              onChange={handleFileUpload}
+              onChange={handlePicked('camera')}
             />
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              ref={scanInputRef}
-              onChange={handleScanPicked}
-            />
-            {scanFile && (
+            {review && (
               <React.Suspense fallback={null}>
-                <ReceiptScanner
-                  file={scanFile}
-                  onDone={handleScanDone}
-                  onRetake={handleScanClick}
-                  onCancel={() => setScanFile(null)}
+                <ReceiptReview
+                  key={review.version}
+                  file={review.files[review.index]}
+                  index={review.index}
+                  total={review.files.length}
+                  source={review.source}
+                  onUse={handleReviewUse}
+                  onUseAllOriginal={handleUseAllOriginal}
+                  onSkip={nextReview}
+                  onRetake={() => openPicker(review.source)}
+                  onCancel={() => setReview(null)}
                 />
               </React.Suspense>
             )}
@@ -360,18 +369,13 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
               {/* Only shown on touch devices, where a camera is likely */}
               <button
                 type="button"
-                onClick={() => cameraInputRef.current?.click()}
+                onClick={() => openPicker('camera')}
                 className={`${receiptActionClass} hidden [@media(pointer:coarse)]:flex`}
               >
                 <Camera className="w-5 h-5" />
                 Camera
               </button>
-              {/* Camera photo + edge crop + cleanup; on desktop it opens the file picker instead */}
-              <button type="button" onClick={handleScanClick} className={`${receiptActionClass} flex`}>
-                <ScanLine className="w-5 h-5" />
-                Scan
-              </button>
-              <button type="button" onClick={() => fileInputRef.current?.click()} className={`${receiptActionClass} flex`}>
+              <button type="button" onClick={() => openPicker('upload')} className={`${receiptActionClass} flex`}>
                 <Upload className="w-5 h-5" />
                 Upload
               </button>

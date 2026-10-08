@@ -147,8 +147,9 @@ function collectCandidates(cv, binary, candidates, inset = 0) {
   }
 }
 
-// Finds the receipt in the photo. Tries edge-based and brightness-based outlines (receipts
-// are usually lighter than what they're lying on) and keeps the best 4-cornered one.
+// Finds the receipt in the photo. Looks for its outline in brightness and in colour (receipts
+// are usually a light, colourless paper, which can stand out by colour even when the table is
+// just as bright), using both edges and thresholds, and keeps the best 4-cornered shape.
 // Returns { corners, found }; when nothing convincing is found the corners cover the whole photo.
 export function detectCorners(cv, canvas) {
   const { width, height } = canvas;
@@ -157,33 +158,62 @@ export function detectCorners(cv, canvas) {
 
   const src = cv.imread(canvas);
   const small = new cv.Mat();
+  const rgb = new cv.Mat();
   const gray = new cv.Mat();
+  const hsv = new cv.Mat();
+  const lab = new cv.Mat();
+  const hsvChannels = new cv.MatVector();
+  const labChannels = new cv.MatVector();
+  const blurred = new cv.Mat();
   const binary = new cv.Mat();
   const closeKernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
   const fillKernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(15, 15));
   const candidates = [];
 
-  try {
-    cv.resize(src, small, new cv.Size(0, 0), detectScale, detectScale, cv.INTER_AREA);
-    cv.cvtColor(small, gray, cv.COLOR_RGBA2GRAY);
-
-    // 1. Edges at a few sensitivities, thickened so small gaps in the outline close up
-    const blurred = new cv.Mat();
-    cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
-    for (const [low, high] of [[20, 60], [40, 120], [75, 200]]) {
+  // Outline edges, thickened so small gaps close up
+  const addEdgeCandidates = (channel, thresholds) => {
+    cv.GaussianBlur(channel, blurred, new cv.Size(5, 5), 0);
+    for (const [low, high] of thresholds) {
       cv.Canny(blurred, binary, low, high);
       cv.morphologyEx(binary, binary, cv.MORPH_CLOSE, closeKernel);
       cv.dilate(binary, binary, closeKernel);
       collectCandidates(cv, binary, candidates, 3 * Math.SQRT2);
     }
+  };
 
-    // 2. Bright paper vs darker background (Otsu picks the cut-off), with the text filled in
-    cv.GaussianBlur(gray, blurred, new cv.Size(9, 9), 0);
-    cv.threshold(blurred, binary, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
+  // Paper vs background split (Otsu picks the cut-off), with the text filled in
+  const addThresholdCandidates = (channel, type) => {
+    cv.GaussianBlur(channel, blurred, new cv.Size(9, 9), 0);
+    cv.threshold(blurred, binary, 0, 255, type + cv.THRESH_OTSU);
     cv.morphologyEx(binary, binary, cv.MORPH_CLOSE, fillKernel);
     cv.morphologyEx(binary, binary, cv.MORPH_OPEN, fillKernel);
     collectCandidates(cv, binary, candidates);
-    blurred.delete();
+  };
+
+  try {
+    cv.resize(src, small, new cv.Size(0, 0), detectScale, detectScale, cv.INTER_AREA);
+    cv.cvtColor(small, rgb, cv.COLOR_RGBA2RGB);
+    cv.cvtColor(rgb, gray, cv.COLOR_RGB2GRAY);
+    cv.cvtColor(rgb, hsv, cv.COLOR_RGB2HSV);
+    cv.cvtColor(rgb, lab, cv.COLOR_RGB2Lab);
+    cv.split(hsv, hsvChannels);
+    cv.split(lab, labChannels);
+    const saturation = hsvChannels.get(1);
+    const yellowBlue = labChannels.get(2);
+
+    try {
+      // Brightness: paper lighter than the table
+      addEdgeCandidates(gray, [[20, 60], [40, 120], [75, 200]]);
+      addThresholdCandidates(gray, cv.THRESH_BINARY);
+      // Colour: paper less saturated / less yellow than wood, beige or coloured surfaces
+      addEdgeCandidates(saturation, [[20, 60], [40, 120]]);
+      addEdgeCandidates(yellowBlue, [[5, 15], [10, 30]]); // narrow value range, so low thresholds
+      addThresholdCandidates(saturation, cv.THRESH_BINARY_INV);
+      addThresholdCandidates(yellowBlue, cv.THRESH_BINARY_INV);
+    } finally {
+      saturation.delete();
+      yellowBlue.delete();
+    }
 
     if (!candidates.length) return { corners: fullImageCorners(width, height), found: false };
 
@@ -196,7 +226,8 @@ export function detectCorners(cv, canvas) {
     const found = polygonArea(corners) < width * height * 0.9;
     return { corners: found ? orderCorners(corners) : fullImageCorners(width, height), found };
   } finally {
-    [src, small, gray, binary, closeKernel, fillKernel].forEach((m) => m.delete());
+    [src, small, rgb, gray, hsv, lab, hsvChannels, labChannels, blurred, binary, closeKernel, fillKernel]
+      .forEach((m) => m.delete());
   }
 }
 
