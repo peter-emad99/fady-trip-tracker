@@ -1,6 +1,13 @@
 // GET /api/google/connect -> sends the Drive owner to Google's consent screen.
 // One-time setup: the resulting refresh token goes into GOOGLE_REFRESH_TOKEN.
 export function GET(request) {
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    return new Response('Google Drive is not set up yet: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are missing on the server.', {
+      status: 503,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
+  }
+
   const state = crypto.randomUUID();
   const redirectUri = `${new URL(request.url).origin}/api/google/callback`;
 
