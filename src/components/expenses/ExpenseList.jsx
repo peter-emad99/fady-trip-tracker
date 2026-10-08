@@ -575,49 +575,58 @@ function ExpenseRow({ expense, colorKey, onEdit, onDelete }) {
           </span>
         </div>
 
-        {/* Details on the left, Edit / Delete on the right */}
-        <div className="mt-1 flex items-center gap-2">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-slate-500">
-              {expense.assigned_to && (
-                <span className="flex items-center gap-1 whitespace-nowrap">
-                  <User className="h-3 w-3" /> {expense.assigned_to}
-                </span>
-              )}
-              {receipts.length > 0 && (
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <button className="pointer-events-auto relative -mx-1.5 -my-2 flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-2 text-indigo-600 transition-colors hover:text-indigo-700">
-                      {receipts.length > 1 ? (
-                        <Images className="h-3.5 w-3.5" />
-                      ) : (
-                        <ImageIcon className="h-3.5 w-3.5" />
-                      )}
-                      {receipts.length > 1
-                        ? `${receipts.length} receipts`
-                        : "Receipt"}
-                    </button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-3xl">
-                    <DialogTitle>Receipts · {expense.category}</DialogTitle>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      {receipts.map((url, idx) => (
-                        <div
-                          key={url}
-                          className="overflow-hidden rounded-lg border border-gray-100 shadow-sm"
-                        >
-                          <ReceiptImage
-                            url={url}
-                            alt={`Receipt ${idx + 1}`}
-                            className="h-auto min-h-24 w-full object-contain"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              )}
+        {(expense.assigned_to || receipts.length > 0) && (
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-slate-500">
+            {expense.assigned_to && (
+              <span className="flex items-center gap-1 whitespace-nowrap">
+                <User className="h-3 w-3" /> {expense.assigned_to}
+              </span>
+            )}
+            {receipts.length > 0 && (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <button className="pointer-events-auto relative -mx-1.5 -my-2 flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-2 text-indigo-600 transition-colors hover:text-indigo-700">
+                    {receipts.length > 1 ? (
+                      <Images className="h-3.5 w-3.5" />
+                    ) : (
+                      <ImageIcon className="h-3.5 w-3.5" />
+                    )}
+                    {receipts.length > 1
+                      ? `${receipts.length} receipts`
+                      : "Receipt"}
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="max-w-3xl">
+                  <DialogTitle>Receipts · {expense.category}</DialogTitle>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {receipts.map((url, idx) => (
+                      <div
+                        key={url}
+                        className="overflow-hidden rounded-lg border border-gray-100 shadow-sm"
+                      >
+                        <ReceiptImage
+                          url={url}
+                          alt={`Receipt ${idx + 1}`}
+                          className="h-auto min-h-24 w-full object-contain"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
-          <div className="pointer-events-auto relative -my-1.5 -mr-1.5 flex shrink-0 items-center">
+        )}
+
+        {/* Notes on the left, Edit / Delete in the bottom-right corner */}
+        <div className="mt-1 flex items-end gap-2">
+          <p
+            className="min-w-0 flex-1 pb-1.5 text-sm leading-snug text-slate-600 line-clamp-2"
+            dir="auto"
+          >
+            {expense.notes}
+          </p>
+          <div className="pointer-events-auto relative -mb-1.5 -mr-1.5 flex shrink-0 items-center">
             <Button
               variant="ghost"
               size="icon"
@@ -631,24 +640,14 @@ function ExpenseRow({ expense, colorKey, onEdit, onDelete }) {
               variant="ghost"
               size="icon"
               aria-label={`Delete ${expense.category} expense`}
-              className="h-9 w-9 text-slate-400 hover:bg-red-50 hover:text-red-600"
+              className="h-9 w-9 text-red-500 hover:bg-red-50 hover:text-red-600"
               onClick={() => onDelete(expense.id)}
             >
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
-
-        {expense.notes && (
-          <p
-            className="mt-1.5 line-clamp-2 text-sm leading-snug text-slate-600"
-            dir="auto"
-          >
-            {expense.notes}
-          </p>
-        )}
       </div>
-
     </div>
   );
 }

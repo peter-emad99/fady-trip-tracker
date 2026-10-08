@@ -169,7 +169,7 @@ Every screen was checked at 375px and 320px wide (no sideways scrolling), in lig
   - Deleting shows "Expense deleted · Undo" for 6 seconds, then the delete is sent.
   - The delete is kept in the offline queue, so closing the app during those 6 seconds doesn't lose it.
   - Deleting an expense asks first ("Delete this expense?"), then Undo is still offered.
-  - Every expense card has Edit and Delete buttons on all screen sizes, replacing the ⋯ menu that phones didn't have.
+  - Every expense card has Edit and a red Delete button in its bottom-right corner on all screen sizes, replacing the ⋯ menu that phones didn't have.
   - Also fixed: toasts now close by themselves after a few seconds, and their ✕ button is visible on phones.
 - [ ] **Multi-currency:** a currency and exchange rate per expense, with a converted total.
 - [ ] **Trip sharing** with other travelers. This goes well with split and settle-up.
