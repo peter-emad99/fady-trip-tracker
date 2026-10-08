@@ -419,6 +419,10 @@ export default function TripDetails() {
               setEditingExpense(expense);
               setShowExpenseForm(true);
             }}
+            onAdd={() => {
+              setEditingExpense(null);
+              setShowExpenseForm(true);
+            }}
           />
         </TabsContent>
 

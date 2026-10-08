@@ -10,6 +10,7 @@ import {
   SlidersHorizontal,
   ChevronDown,
   X,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 
-export default function ExpenseList({ expenses, onDelete, onEdit }) {
+export default function ExpenseList({ expenses, onDelete, onEdit, onAdd }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -218,6 +219,16 @@ export default function ExpenseList({ expenses, onDelete, onEdit }) {
                   />
                 </Button>
               </CollapsibleTrigger>
+
+              {onAdd && (
+                <Button
+                  className="gap-2 bg-slate-900 hover:bg-slate-800"
+                  onClick={onAdd}
+                >
+                  <Plus className="w-4 h-4" />
+                  Add
+                </Button>
+              )}
 
               {(searchTerm || activeFilterCount > 0) && (
                 <Button

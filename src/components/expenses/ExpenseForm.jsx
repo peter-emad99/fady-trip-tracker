@@ -156,7 +156,7 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: '100%' }}
       transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-      className="fixed inset-0 z-50 bg-white md:inset-x-auto md:left-1/2 md:top-[10%] md:bottom-[10%] md:w-[500px] md:-translate-x-1/2 md:rounded-2xl md:shadow-2xl flex flex-col"
+      className="fixed inset-0 z-50 bg-white md:m-auto md:h-[80vh] md:w-[500px] md:rounded-2xl md:shadow-2xl flex flex-col"
     >
       <div className="flex items-center justify-between p-4 border-b border-gray-100">
         <h2 className="text-lg font-bold">{expenseToEdit ? 'Edit Expense' : 'Add New Expense'}</h2>
