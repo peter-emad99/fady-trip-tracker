@@ -1,4 +1,5 @@
 import { supabase } from '@/api/supabaseClient';
+import { csvCell } from '@/lib/csv';
 
 const SUPABASE_RECEIPTS_URL = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/receipts/`;
 const EXT_BY_MIME = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/heic': 'heic' };
@@ -6,11 +7,6 @@ const CONCURRENCY = 4;
 
 function cleanName(value) {
   return String(value ?? '').replace(/[\r\n\t/\\:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100) || 'Untitled';
-}
-
-function csvCell(value) {
-  const text = String(value ?? '');
-  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 function receiptUrls(expense) {

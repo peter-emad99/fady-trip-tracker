@@ -1,4 +1,5 @@
-const CACHE_VERSION = 'trippy-v1';
+// Bump to clear old caches (e.g. after the switch to lazy-loaded pages)
+const CACHE_VERSION = 'trippy-v2';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const OFFLINE_URLS = ['/', '/index.html', '/manifest.json', '/pwa-icon.svg', '/apple-touch-icon.svg'];

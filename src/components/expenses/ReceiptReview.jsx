@@ -249,7 +249,7 @@ export default function ReceiptReview({
         {readError && (
           <div className="text-center space-y-4 max-w-xs">
             <p className="text-sm text-slate-300">Can't preview this photo, but it can still be uploaded.</p>
-            <Button type="button" onClick={() => onUse(file)} className="bg-indigo-600 hover:bg-indigo-700">
+            <Button type="button" onClick={() => onUse(file)} className="bg-indigo-600 text-white hover:bg-indigo-700">
               Upload as is
             </Button>
           </div>
@@ -376,7 +376,7 @@ export default function ReceiptReview({
             type="button"
             onClick={handleUse}
             disabled={busy || scanPending}
-            className="w-full h-12 text-base bg-indigo-600 hover:bg-indigo-700 gap-2"
+            className="w-full h-12 text-base bg-indigo-600 text-white hover:bg-indigo-700 gap-2"
           >
             <Check className="w-5 h-5" /> {useLabel}
           </Button>
@@ -399,7 +399,7 @@ export default function ReceiptReview({
             <Button type="button" variant="ghost" onClick={() => setDraft(null)} className="h-12 text-white hover:bg-white/10 hover:text-white">
               Cancel
             </Button>
-            <Button type="button" onClick={applyEdit} disabled={busy} className="h-12 bg-indigo-600 hover:bg-indigo-700 gap-2">
+            <Button type="button" onClick={applyEdit} disabled={busy} className="h-12 bg-indigo-600 text-white hover:bg-indigo-700 gap-2">
               <Check className="w-5 h-5" /> Apply
             </Button>
           </div>

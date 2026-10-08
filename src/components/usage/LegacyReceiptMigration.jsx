@@ -101,7 +101,7 @@ export default function LegacyReceiptMigration({ driveReady, onFinished }) {
           </p>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button size="sm" className="gap-2 bg-indigo-600 hover:bg-indigo-700 shrink-0" disabled={!driveReady}>
+              <Button size="sm" className="gap-2 bg-indigo-600 text-white hover:bg-indigo-700 shrink-0" disabled={!driveReady}>
                 <ArrowRightLeft className="w-4 h-4" /> Copy to Google Drive
               </Button>
             </AlertDialogTrigger>
@@ -116,7 +116,7 @@ export default function LegacyReceiptMigration({ driveReady, onFinished }) {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={migrate} className="bg-indigo-600 hover:bg-indigo-700">
+                <AlertDialogAction onClick={migrate} className="bg-indigo-600 text-white hover:bg-indigo-700">
                   Copy receipts
                 </AlertDialogAction>
               </AlertDialogFooter>

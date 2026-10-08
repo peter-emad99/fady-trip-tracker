@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
-import { FolderPlus, Search } from 'lucide-react';
+import { FolderPlus, Search, FileSpreadsheet, CloudOff, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -10,14 +10,21 @@ import { Label } from '@/components/ui/label';
 import TripCard from '../components/trips/TripCard';
 import CategoryManager from '../components/expenses/CategoryManager';
 import { toast } from '@/components/ui/use-toast';
+import { useOutbox, applyOutbox } from '@/lib/outbox';
+import { useOnline } from '@/lib/network';
+import { expensesCsv, downloadFile } from '@/lib/csv';
+import { format } from 'date-fns';
 
 export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const outbox = useOutbox();
+  const online = useOnline();
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data: trips = [], isLoading: tripsLoading, isError: tripsError, refetch: refetchTrips } = useQuery({
+  const { data: trips = [], isLoading: tripsLoading, isError: tripsError, refetch: refetchTrips, fetchStatus: tripsFetchStatus } = useQuery({
     queryKey: ['trips'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -41,11 +48,30 @@ export default function Dashboard() {
 
   const spentByTrip = useMemo(() => {
     const totals = {};
-    for (const expense of expenses) {
+    // Includes expenses added or deleted offline that haven't synced yet
+    for (const expense of applyOutbox(expenses, outbox)) {
       totals[expense.trip_id] = (totals[expense.trip_id] || 0) + Number(expense.cost || 0);
     }
     return totals;
-  }, [expenses]);
+  }, [expenses, outbox]);
+
+  // One spreadsheet with every trip's expenses
+  const exportAll = async () => {
+    setIsExporting(true);
+    try {
+      const { data, error } = await supabase.from('expenses').select('*');
+      if (error) throw error;
+      const { data: budgets } = await supabase.from('trip_budgets').select('id, name');
+      downloadFile(
+        expensesCsv(applyOutbox(data, outbox), { trips, budgets: budgets || [] }),
+        `Trippy_all_expenses_${format(new Date(), 'yyyy-MM-dd')}.csv`,
+      );
+    } catch (err) {
+      toast({ variant: 'destructive', title: "Couldn't export the spreadsheet", description: err.message });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const createTripMutation = useMutation({
     mutationFn: async (data) => {
@@ -86,9 +112,21 @@ export default function Dashboard() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <CategoryManager />
+          {trips.length > 0 && (
+            <Button
+              variant="outline"
+              className="rounded-full"
+              onClick={exportAll}
+              disabled={isExporting || !online}
+              title={online ? 'Download every expense as a spreadsheet' : 'Needs a connection'}
+            >
+              {isExporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileSpreadsheet className="w-4 h-4 mr-2" />}
+              Export all
+            </Button>
+          )}
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 rounded-full px-6">
+              <Button className="bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-100 dark:shadow-none rounded-full px-6" disabled={!online} title={online ? undefined : "Needs a connection"}>
                 <FolderPlus className="w-4 h-4 mr-2" />
                 New Trip
               </Button>
@@ -121,7 +159,7 @@ export default function Dashboard() {
               </div>
               <div className="pt-4 flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
-                <Button type="submit" className="bg-indigo-600" disabled={createTripMutation.isPending}>
+                <Button type="submit" className="bg-indigo-600 text-white hover:bg-indigo-700" disabled={createTripMutation.isPending}>
                   {createTripMutation.isPending ? 'Creating...' : 'Create Trip'}
                 </Button>
               </div>
@@ -150,7 +188,13 @@ export default function Dashboard() {
             <div key={i} className="h-48 bg-gray-100 rounded-2xl animate-pulse" />
           ))}
         </div>
-      ) : tripsError ? (
+      ) : tripsFetchStatus === 'paused' && !trips.length ? (
+        <div className="text-center py-12">
+          <CloudOff className="mx-auto mb-3 h-8 w-8 text-slate-400" />
+          <h3 className="text-lg font-medium text-slate-900">You're offline</h3>
+          <p className="text-slate-500">Your trips will appear once you're back online.</p>
+        </div>
+      ) : tripsError && !trips.length ? (
         <div className="text-center py-12">
           <h3 className="text-lg font-medium text-slate-900">Couldn't load your trips</h3>
           <p className="text-slate-500 mb-4">Check your connection and try again.</p>

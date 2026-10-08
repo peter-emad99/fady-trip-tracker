@@ -1,4 +1,6 @@
 import { supabase } from '@/api/supabaseClient';
+import { isLocalReceipt, saveLocalReceipt, deleteLocalReceipt } from '@/lib/localReceipts';
+import { isNetworkError } from '@/lib/network';
 
 const DRIVE_URL_PREFIX = '/api/receipts?id=';
 const MAX_DIMENSION = 2000;
@@ -52,9 +54,28 @@ export async function uploadReceipt(file, namePrefix) {
   return uploadBlob(body, namePrefix, ext);
 }
 
-// Deletes a receipt from wherever it lives: Google Drive, or the legacy Supabase bucket.
+// Uploads the receipt, or keeps it on this device (to upload later) when there's no connection.
+// Returns the URL to store on the expense either way.
+export async function uploadOrKeepLocal(file, namePrefix) {
+  const keepLocal = async () => saveLocalReceipt(await compressImage(file), file.name || 'receipt.jpg');
+  if (!navigator.onLine) return keepLocal();
+  try {
+    return await uploadReceipt(file, namePrefix);
+  } catch (err) {
+    if (isNetworkError(err)) return keepLocal();
+    throw err;
+  }
+}
+
+// Deletes a receipt from wherever it lives: this device (not uploaded yet), Google Drive, or the
+// legacy Supabase bucket.
 export async function deleteReceipt(url) {
   if (!url) return;
+
+  if (isLocalReceipt(url)) {
+    await deleteLocalReceipt(url);
+    return;
+  }
 
   if (url.startsWith(DRIVE_URL_PREFIX)) {
     const id = url.slice(DRIVE_URL_PREFIX.length);

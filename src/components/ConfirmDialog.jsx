@@ -22,7 +22,7 @@ export default function ConfirmDialog({ confirm, onClose }) {
         <AlertDialogFooter>
           <AlertDialogCancel>{confirm?.cancelLabel || "Cancel"}</AlertDialogCancel>
           <AlertDialogAction
-            className="bg-red-600 hover:bg-red-700"
+            className="bg-red-600 text-white hover:bg-red-700"
             onClick={() => confirm?.onConfirm()}
           >
             {confirm?.confirmLabel || "Delete"}

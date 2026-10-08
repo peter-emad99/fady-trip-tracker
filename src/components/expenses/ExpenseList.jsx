@@ -12,7 +12,10 @@ import {
   X,
   Plus,
   Trash2,
+  CloudUpload,
+  AlertTriangle,
 } from "lucide-react";
+import ReceiptImage from "./ReceiptImage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -480,9 +483,31 @@ export default function ExpenseList({
                   {expense.category?.slice(0, 2)}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h4 className="font-bold text-slate-900 text-base truncate">
-                    {expense.category}
-                  </h4>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <h4 className="font-bold text-slate-900 text-base truncate">
+                      {expense.category}
+                    </h4>
+                    {/* Saved on this device, not on the server yet */}
+                    {expense._pending && (
+                      <span
+                        className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                          expense._error
+                            ? "bg-red-100 text-red-700"
+                            : "bg-amber-100 text-amber-800"
+                        }`}
+                        title={
+                          expense._error || "Will upload when you're online"
+                        }
+                      >
+                        {expense._error ? (
+                          <AlertTriangle className="h-3 w-3" />
+                        ) : (
+                          <CloudUpload className="h-3 w-3" />
+                        )}
+                        {expense._error ? "Sync failed" : "Waiting to sync"}
+                      </span>
+                    )}
+                  </div>
 
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-slate-600 mt-1">
                     <span className="flex items-center gap-1 whitespace-nowrap">
@@ -532,11 +557,10 @@ export default function ExpenseList({
                                   key={idx}
                                   className="rounded-lg overflow-hidden border border-gray-100 shadow-sm"
                                 >
-                                  <img
-                                    src={url}
+                                  <ReceiptImage
+                                    url={url}
                                     alt={`Receipt ${idx + 1}`}
-                                    loading="lazy"
-                                    className="w-full h-auto object-contain"
+                                    className="w-full h-auto min-h-24 object-contain"
                                   />
                                 </div>
                               ))}

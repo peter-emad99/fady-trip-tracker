@@ -105,9 +105,25 @@ Review date: 2026-10-08. `[x]` = done, `[ ]` = not done yet.
 - [ ] **Daily allowance:** "X EGP/day left" plus a spend-per-day chart, using the trip's start and end dates.
 - [ ] **Read the amount and date from receipts (OCR)** after scanning, and pre-fill the expense form.
 - [ ] **Budget alerts:** automatically link categories to sub-budgets, and warn at 80% and 100%.
-- [ ] **CSV/Excel export for everyone,** reusing the CSV code from the admin backup.
-- [ ] **Undo on delete:** an "Expense deleted · Undo" message.
+- [x] **CSV/Excel export for everyone.**
+  - The trip page's **Export** menu offers "PDF report" or "Excel (CSV)".
+  - The Dashboard has **Export all**, one spreadsheet of every trip.
+  - Columns: date, day, category, amount, assigned to, sub-budget, notes and receipt links.
+  - The file opens in Excel with Arabic intact.
+  - Shared code is in `src/lib/csv.js`, also used by the admin backup.
+- [x] **Undo on delete.**
+  - Deleting shows "Expense deleted · Undo" for 6 seconds, then the delete is sent.
+  - The delete is kept in the offline queue, so closing the app during those 6 seconds doesn't lose it.
+  - This replaces the confirmation dialog for expenses. Trips still ask first.
+  - Also fixed: toasts now close by themselves after a few seconds, and their ✕ button is visible on phones.
 - [ ] **Multi-currency:** a currency and exchange rate per expense, with a converted total.
 - [ ] **Trip sharing** with other travelers. This goes well with split and settle-up.
-- [ ] **Add expenses offline** and sync them later. The app already has a service worker.
+- [x] **Offline support.**
+  - The last loaded trips and expenses are saved on the device for 7 days, so the app opens and shows them with no connection.
+  - Adding, editing and deleting expenses works offline, receipt photos included (kept in IndexedDB). Changes show "Waiting to sync" and sync automatically when you're back online.
+  - A banner shows offline status, or failed syncs with **Retry** and **Discard** buttons.
+  - Every page's code is downloaded in the background, so pages open offline.
+  - A page that can't load shows a Reload screen instead of a blank one.
+  - Trip, sub-budget and category changes still need a connection, and those buttons are disabled offline.
+  - Signing out clears the saved data, and warns you first if changes haven't synced.
 - [ ] **Search across all trips,** not just trip names.

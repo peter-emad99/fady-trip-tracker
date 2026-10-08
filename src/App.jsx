@@ -1,13 +1,15 @@
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import './App.css'
 import { Toaster } from "@/components/ui/toaster"
-import { QueryClientProvider } from '@tanstack/react-query'
-import { queryClientInstance } from '@/lib/query-client'
-import { pagesConfig } from './pages.config'
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
+import { queryClientInstance, persistOptions } from '@/lib/query-client'
+import { syncOutbox } from '@/lib/outbox'
+import { pagesConfig, preloadPages } from './pages.config'
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { ThemeProvider } from '@/lib/theme';
+import PageErrorBoundary from '@/components/PageErrorBoundary';
 import Login from './pages/Login';
 
 const { Pages, Layout, mainPage } = pagesConfig;
@@ -22,12 +24,49 @@ const PageLoading = () => (
 
 // Pages are lazy-loaded, so the layout stays on screen while the next page's code downloads
 const LayoutWrapper = ({ children, currentPageName }) => {
-  const page = <Suspense fallback={<PageLoading />}>{children}</Suspense>;
+  const page = (
+    <PageErrorBoundary key={currentPageName}>
+      <Suspense fallback={<PageLoading />}>{children}</Suspense>
+    </PageErrorBoundary>
+  );
   return Layout ? <Layout currentPageName={currentPageName}>{page}</Layout> : page;
 };
 
+// Sends offline changes when the app opens, comes back online or returns to the foreground
+function useOfflineSync(enabled) {
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const sync = () => syncOutbox();
+    const onVisible = () => document.visibilityState === 'visible' && sync();
+    sync();
+    window.addEventListener('online', sync);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('online', sync);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [enabled]);
+}
+
+// Downloads the other pages' code in the background, so they open offline too
+function usePreloadPages(enabled) {
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const preload = () => {
+      preloadPages();
+      import('./components/expenses/ReceiptReview').catch(() => {});
+      import('./components/expenses/ExpenseChart').catch(() => {});
+    };
+    const idle = window.requestIdleCallback ?? ((cb) => setTimeout(cb, 2000));
+    const handle = idle(preload);
+    return () => (window.cancelIdleCallback ?? clearTimeout)(handle);
+  }, [enabled]);
+}
+
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated } = useAuth();
+  useOfflineSync(isAuthenticated);
+  usePreloadPages(isAuthenticated);
 
   // Show loading spinner while checking auth
   if (isLoadingAuth) {
@@ -75,12 +114,12 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <QueryClientProvider client={queryClientInstance}>
+        <PersistQueryClientProvider client={queryClientInstance} persistOptions={persistOptions}>
           <Router>
             <AuthenticatedApp />
           </Router>
           <Toaster />
-        </QueryClientProvider>
+        </PersistQueryClientProvider>
       </AuthProvider>
     </ThemeProvider>
   )

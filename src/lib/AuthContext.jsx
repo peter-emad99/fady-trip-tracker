@@ -1,5 +1,19 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/api/supabaseClient';
+import { clearSavedData } from '@/lib/query-client';
+import { clearOutbox } from '@/lib/outbox';
+import { isNetworkError } from '@/lib/network';
+
+// Offline with an expired access token, Supabase can't refresh it and reports no session, though the
+// stored session is still valid. Keep using its user so the app works offline; Supabase refreshes
+// the token by itself once the connection is back.
+function storedUser() {
+  try {
+    return JSON.parse(localStorage.getItem(supabase.auth.storageKey))?.user ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const AuthContext = createContext(null);
 
@@ -9,14 +23,18 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setIsLoadingAuth(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data: { session }, error }) => {
+        setUser(session?.user ?? (isNetworkError(error) ? storedUser() : null));
+      })
+      .catch((error) => setUser(isNetworkError(error) ? storedUser() : null))
+      .finally(() => setIsLoadingAuth(false));
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // A failed refresh while offline isn't a sign-out; only trust an explicit one
+      setUser((current) => session?.user ?? (event === 'SIGNED_OUT' || navigator.onLine ? null : current));
       setIsLoadingAuth(false);
     });
 
@@ -50,6 +68,8 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) console.error("Logout error:", error);
+    clearSavedData();
+    clearOutbox();
   };
 
   const value = {

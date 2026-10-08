@@ -4,6 +4,15 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/api/supabaseClient";
 import { deleteReceipt, organizeReceipts } from "@/api/receiptStorage";
 import { formatMoney, formatDate } from "@/lib/format";
+import { expensesCsv, downloadFile, safeFileName } from "@/lib/csv";
+import {
+  useOutbox,
+  applyOutbox,
+  queueDelete,
+  cancelOp,
+  dropTripOps,
+} from "@/lib/outbox";
+import { useOnline } from "@/lib/network";
 import {
   Plus,
   ArrowLeft,
@@ -15,6 +24,9 @@ import {
   List as ListIcon,
   Pencil,
   Download,
+  FileText,
+  FileSpreadsheet,
+  CloudOff,
   Trash2,
   ChevronRight,
   Loader2,
@@ -33,6 +45,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
+import { ToastAction } from "@/components/ui/toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
 import ExpenseForm from "../components/expenses/ExpenseForm";
@@ -51,6 +70,8 @@ export default function TripDetails() {
   const [confirm, setConfirm] = useState(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const outbox = useOutbox();
+  const online = useOnline();
 
   // Fetch Trip
   const {
@@ -58,6 +79,7 @@ export default function TripDetails() {
     isLoading: tripLoading,
     error: tripError,
     refetch: refetchTrip,
+    fetchStatus: tripFetchStatus,
   } = useQuery({
     queryKey: ["trip", id],
     queryFn: async () => {
@@ -73,7 +95,7 @@ export default function TripDetails() {
   });
 
   // Fetch Expenses
-  const { data: expenses, isLoading: expensesLoading } = useQuery({
+  const { data: serverExpenses, isLoading: expensesLoading } = useQuery({
     queryKey: ["expenses", id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -99,37 +121,33 @@ export default function TripDetails() {
     initialData: [],
   });
 
-  const deleteExpenseMutation = useMutation({
-    mutationFn: async (expense) => {
-      // Delete the record first, so a failure never leaves an expense whose receipts are gone
-      const { error } = await supabase
-        .from("expenses")
-        .delete()
-        .eq("id", expense.id);
-      if (error) throw error;
+  // What's on the server plus changes still waiting to sync (offline adds/edits, recent deletes)
+  const expenses = useMemo(
+    () => serverExpenses && applyOutbox(serverExpenses, outbox, id),
+    [serverExpenses, outbox, id],
+  );
 
-      await deleteReceiptFiles([expense]);
-    },
-    // Remove it from the list straight away; it comes back if the delete fails
-    onMutate: async (expense) => {
-      await queryClient.cancelQueries({ queryKey: ["expenses", id] });
-      const previous = queryClient.getQueryData(["expenses", id]);
-      queryClient.setQueryData(["expenses", id], (old) =>
-        old?.filter((e) => e.id !== expense.id),
-      );
-      return { previous };
-    },
-    onSuccess: () => toast({ title: "Expense deleted" }),
-    onError: (error, _expense, context) => {
-      queryClient.setQueryData(["expenses", id], context?.previous);
-      toast({
-        variant: "destructive",
-        title: "Couldn't delete the expense",
-        description: error.message,
-      });
-    },
-    onSettled: () => invalidateTripData(),
-  });
+  // Deletes wait a few seconds before they're sent, so Undo can simply cancel them. They're kept
+  // in the offline outbox, so closing the app in the meantime doesn't lose them.
+  const UNDO_MS = 6000;
+  const deleteExpense = (expense) => {
+    const opId = queueDelete(expense, { delayMs: UNDO_MS });
+    const { dismiss } = toast({
+      title: "Expense deleted",
+      description: `${formatMoney(expense.cost)} · ${expense.category}`,
+      duration: UNDO_MS,
+      action: (
+        <ToastAction
+          onClick={() => {
+            cancelOp(opId);
+            dismiss();
+          }}
+        >
+          Undo
+        </ToastAction>
+      ),
+    });
+  };
 
   const updateTripMutation = useMutation({
     mutationFn: async (data) => {
@@ -171,8 +189,10 @@ export default function TripDetails() {
       const { error } = await supabase.from("trips").delete().eq("id", id);
       if (error) throw error;
 
-      // Its expenses go with it (cascade), so clean up their receipts in Google Drive too
-      await deleteReceiptFiles(expenses || []);
+      // Its expenses go with it (cascade), so clean up their receipts in Google Drive too,
+      // and forget any of its changes still waiting to sync
+      await deleteReceiptFiles(serverExpenses || []);
+      dropTripOps(id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trips"] });
@@ -192,6 +212,26 @@ export default function TripDetails() {
     e.preventDefault();
     const formData = new FormData(e.target);
     updateTripMutation.mutate(Object.fromEntries(formData));
+  };
+
+  const handleExportCsv = async () => {
+    try {
+      // Sub-budget names for the spreadsheet; fine without them if they can't be loaded
+      const { data: budgets } = await supabase
+        .from("trip_budgets")
+        .select("id, name")
+        .eq("trip_id", id);
+      downloadFile(
+        expensesCsv(expenses || [], { budgets: budgets || [] }),
+        `${safeFileName(trip.name)}_expenses.csv`,
+      );
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Couldn't export the spreadsheet",
+        description: err.message,
+      });
+    }
   };
 
   const handleExport = async () => {
@@ -239,6 +279,21 @@ export default function TripDetails() {
         <div className="h-40 rounded-2xl bg-gray-100 animate-pulse" />
       </div>
     );
+  if (!trip && tripFetchStatus === "paused") {
+    return (
+      <div className="py-12 text-center">
+        <CloudOff className="mx-auto mb-3 h-8 w-8 text-slate-400" />
+        <h2 className="text-lg font-medium text-slate-900">You're offline</h2>
+        <p className="mt-1 text-slate-500">
+          This trip hasn't been opened on this device yet, so there's no saved
+          copy. It will load when you're back online.
+        </p>
+        <Button asChild variant="outline" className="mt-4">
+          <Link to="/">Back to trips</Link>
+        </Button>
+      </div>
+    );
+  }
   if (!trip) {
     // PGRST116 = no row: the trip was deleted or the link is wrong. Anything else is a load error.
     const notFound = !tripError || tripError.code === "PGRST116";
@@ -293,7 +348,13 @@ export default function TripDetails() {
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="gap-2 px-3">
+                {/* Only expenses work offline; trip changes need a connection */}
+                <Button
+                  variant="outline"
+                  className="gap-2 px-3"
+                  disabled={!online}
+                  title={online ? undefined : "Needs a connection"}
+                >
                   <Pencil className="w-4 h-4" /> Edit
                 </Button>
               </DialogTrigger>
@@ -361,7 +422,7 @@ export default function TripDetails() {
                     </Button>
                     <Button
                       type="submit"
-                      className="bg-indigo-600"
+                      className="bg-indigo-600 text-white hover:bg-indigo-700"
                       disabled={updateTripMutation.isPending}
                     >
                       {updateTripMutation.isPending
@@ -372,23 +433,53 @@ export default function TripDetails() {
                 </form>
               </DialogContent>
             </Dialog>
-            <Button
-              variant="outline"
-              className="gap-2 px-3"
-              onClick={handleExport}
-              disabled={isExporting}
-            >
-              {isExporting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Download className="w-4 h-4" />
-              )}
-              {isExporting ? "Exporting…" : "Export PDF"}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="gap-2 px-3"
+                  disabled={isExporting}
+                >
+                  {isExporting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  {isExporting ? "Exporting…" : "Export"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuItem
+                  className="gap-2 py-2.5"
+                  onSelect={handleExport}
+                >
+                  <FileText className="h-4 w-4" />
+                  <div>
+                    <p>PDF report</p>
+                    <p className="text-xs text-muted-foreground">
+                      Summary and receipt photos
+                    </p>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="gap-2 py-2.5"
+                  onSelect={handleExportCsv}
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  <div>
+                    <p>Excel (CSV)</p>
+                    <p className="text-xs text-muted-foreground">
+                      Every expense as a row
+                    </p>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               variant="outline"
               className="gap-2 px-3 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
-              disabled={deleteTripMutation.isPending}
+              disabled={deleteTripMutation.isPending || !online}
+              title={online ? undefined : "Needs a connection"}
               onClick={() =>
                 setConfirm({
                   title: `Delete "${trip.name}"?`,
@@ -499,15 +590,7 @@ export default function TripDetails() {
             tripId={id}
             onDelete={(expenseId) => {
               const expense = expenses?.find((e) => e.id === expenseId);
-              if (!expense) return;
-              setConfirm({
-                title: "Delete this expense?",
-                description: `${formatMoney(expense.cost)} · ${expense.category}${
-                  expense.date ? ` · ${formatDate(expense.date, "MMM d")}` : ""
-                }. Its receipts will be deleted too. This can't be undone.`,
-                confirmLabel: "Delete expense",
-                onConfirm: () => deleteExpenseMutation.mutate(expense),
-              });
+              if (expense) deleteExpense(expense);
             }}
             onEdit={(expense) => {
               setEditingExpense(expense);

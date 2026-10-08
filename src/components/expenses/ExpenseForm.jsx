@@ -9,7 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/api/supabaseClient';
 import { useAuth } from '@/lib/AuthContext';
-import { uploadReceipt, deleteReceipt, organizeReceipts, isDriveReceipt } from '@/api/receiptStorage';
+import { uploadOrKeepLocal, deleteReceipt, organizeReceipts, isDriveReceipt } from '@/api/receiptStorage';
+import { isLocalReceipt } from '@/lib/localReceipts';
+import { isNetworkError } from '@/lib/network';
+import { queueSave, hasPendingSave } from '@/lib/outbox';
+import ReceiptImage from './ReceiptImage';
 import { toast } from '@/components/ui/use-toast';
 import { loadOpenCV } from '@/lib/docScanner';
 import { format } from 'date-fns';
@@ -87,7 +91,8 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       setPending((prev) => [...prev, ...items]);
       try {
       // allSettled so receipts that did upload are kept even if another one fails
-      const results = await Promise.allSettled(files.map((file) => uploadReceipt(file, expenseId)));
+      // Offline, photos are kept on this device and uploaded when the expense syncs
+      const results = await Promise.allSettled(files.map((file) => uploadOrKeepLocal(file, expenseId)));
       const newUrls = results.filter(r => r.status === 'fulfilled').map(r => r.value);
       const failed = results.filter(r => r.status === 'rejected');
 
@@ -190,15 +195,33 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       }, [review, confirmDiscard]);
 
   const onSubmit = async (data) => {
-    try {
-      const cleanData = {
-          ...data,
-          cost: parseAmount(data.cost),
-          receipt_url: data.receipt_urls?.[0] || null,
-          user_id: user.id,
-          trip_budget_id: data.trip_budget_id || null
-      };
+    const cleanData = {
+        ...data,
+        cost: parseAmount(data.cost),
+        receipt_url: data.receipt_urls?.[0] || null,
+        user_id: user.id,
+        trip_budget_id: data.trip_budget_id || null
+    };
 
+    // Kept on this device and sent later by the outbox (offline, or the connection dropped)
+    const saveOffline = () => {
+      queueSave({
+        expense: { ...cleanData, id: expenseId, ...(!expenseToEdit && { created_at: new Date().toISOString() }) },
+        isNew: !expenseToEdit,
+        deleteUrls: removedSaved.current,
+      });
+      saved.current = true;
+      toast({ title: 'Saved on this device', description: "It'll sync when you're back online." });
+      onSuccess();
+    };
+
+    // Photos not uploaded yet, or an earlier offline change to this expense, mean it has to queue
+    if (!navigator.onLine || cleanData.receipt_urls?.some(isLocalReceipt) || hasPendingSave(expenseId)) {
+      saveOffline();
+      return;
+    }
+
+    try {
       if (expenseToEdit) {
         const { error } = await supabase.from('expenses').update(cleanData).eq('id', expenseToEdit.id);
         if (error) throw error;
@@ -216,6 +239,10 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
       if (data.receipt_urls?.some(isDriveReceipt)) organizeReceipts({ expenseId });
       onSuccess();
     } catch (error) {
+      if (isNetworkError(error)) {
+        saveOffline();
+        return;
+      }
       console.error('Failed to save expense', error);
       toast({
         variant: 'destructive',
@@ -432,9 +459,18 @@ export default function ExpenseForm({ tripId, categories, expenseToEdit, onClose
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {receiptUrls.map((url, index) => (
                   <div key={url} className="relative aspect-[3/4] rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
-                    <a href={url} target="_blank" rel="noreferrer" className="block w-full h-full">
-                      <img src={url} alt={`Receipt ${index + 1}`} className="w-full h-full object-cover" />
-                    </a>
+                    <ReceiptImage
+                      url={url}
+                      alt={`Receipt ${index + 1}`}
+                      link
+                      linkClassName="block w-full h-full"
+                      className="w-full h-full object-cover"
+                    />
+                    {isLocalReceipt(url) && (
+                      <span className="absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                        Not uploaded
+                      </span>
+                    )}
                     <button
                       type="button"
                       aria-label={`Remove receipt ${index + 1}`}

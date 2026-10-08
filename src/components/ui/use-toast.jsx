@@ -1,8 +1,12 @@
 // Inspired by react-hot-toast library
 import { useState, useEffect } from "react";
 
-const TOAST_LIMIT = 20;
-const TOAST_REMOVE_DELAY = 1000000;
+const TOAST_LIMIT = 3;
+// Time a closed toast stays mounted so its exit animation can play
+const TOAST_REMOVE_DELAY = 300;
+// How long a toast stays up unless `duration` says otherwise (Infinity = until closed)
+const DEFAULT_DURATION = 4000;
+const ERROR_DURATION = 7000;
 
 const actionTypes = {
   ADD_TOAST: "ADD_TOAST",
@@ -110,8 +114,9 @@ function dispatch(action) {
   });
 }
 
-function toast({ ...props }) {
+function toast({ duration, ...props }) {
   const id = genId();
+  const visibleFor = duration ?? (props.variant === "destructive" ? ERROR_DURATION : DEFAULT_DURATION);
 
   const update = (props) =>
     dispatch({
@@ -133,6 +138,8 @@ function toast({ ...props }) {
       },
     },
   });
+
+  if (Number.isFinite(visibleFor)) setTimeout(dismiss, visibleFor);
 
   return {
     id,

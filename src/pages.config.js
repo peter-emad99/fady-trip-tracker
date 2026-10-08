@@ -1,13 +1,21 @@
 import { lazy } from "react";
 import __Layout from "./Layout.jsx";
 
-// Each page loads on first visit, so e.g. the chart and PDF code aren't in the startup bundle
-export const PAGES = {
-  Dashboard: lazy(() => import("./pages/Dashboard")),
-  TripDetails: lazy(() => import("./pages/TripDetails")),
-  TripBudget: lazy(() => import("./pages/TripBudget")),
-  Usage: lazy(() => import("./pages/Usage")),
+const loaders = {
+  Dashboard: () => import("./pages/Dashboard"),
+  TripDetails: () => import("./pages/TripDetails"),
+  TripBudget: () => import("./pages/TripBudget"),
+  Usage: () => import("./pages/Usage"),
 };
+
+// Each page loads on first visit, so e.g. the chart and PDF code aren't in the startup bundle
+export const PAGES = Object.fromEntries(
+  Object.entries(loaders).map(([name, load]) => [name, lazy(load)]),
+);
+
+// Fetches every page's code ahead of time (it's then cached for offline use)
+export const preloadPages = () =>
+  Promise.allSettled(Object.values(loaders).map((load) => load()));
 
 export const pagesConfig = {
   mainPage: "Dashboard",

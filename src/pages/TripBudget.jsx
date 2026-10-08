@@ -24,6 +24,7 @@ import {
 import { formatMoney, formatDate } from "@/lib/format";
 import { toast } from "@/components/ui/use-toast";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { useOnline } from "@/lib/network";
 
 export default function TripBudget() {
   const [searchParams] = useSearchParams();
@@ -35,9 +36,14 @@ export default function TripBudget() {
   const [confirm, setConfirm] = useState(null);
   const [formError, setFormError] = useState("");
   const queryClient = useQueryClient();
+  const online = useOnline();
 
   // Fetch Trip
-  const { data: trip, isLoading: tripLoading } = useQuery({
+  const {
+    data: trip,
+    isLoading: tripLoading,
+    fetchStatus: tripFetchStatus,
+  } = useQuery({
     queryKey: ["trip", id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -239,7 +245,15 @@ export default function TripBudget() {
   if (!trip)
     return (
       <div className="py-12 text-center">
-        <h2 className="text-lg font-medium text-slate-900">Trip not found</h2>
+        <h2 className="text-lg font-medium text-slate-900">
+          {tripFetchStatus === "paused" ? "You're offline" : "Trip not found"}
+        </h2>
+        {tripFetchStatus === "paused" && (
+          <p className="mt-1 text-slate-500">
+            This page hasn't been opened on this device yet. It will load when
+            you're back online.
+          </p>
+        )}
         <Button asChild variant="outline" className="mt-4">
           <Link to="/">Back to trips</Link>
         </Button>
@@ -268,7 +282,12 @@ export default function TripBudget() {
           </div>
           <Dialog open={isAddOpen} onOpenChange={openAdd}>
             <DialogTrigger asChild>
-              <Button className="shrink-0 gap-2 bg-indigo-600 text-white hover:bg-indigo-700">
+              {/* Sub-budget changes need a connection (only expenses work offline) */}
+              <Button
+                className="shrink-0 gap-2 bg-indigo-600 text-white hover:bg-indigo-700"
+                disabled={!online}
+                title={online ? undefined : "Needs a connection"}
+              >
                 <Plus className="w-4 h-4" /> Add
               </Button>
             </DialogTrigger>
@@ -423,6 +442,7 @@ export default function TripBudget() {
                       variant="ghost"
                       size="icon"
                       aria-label={`Edit ${budget.name}`}
+                      disabled={!online}
                       onClick={() => {
                         setFormError("");
                         setEditingBudget(budget);
@@ -436,6 +456,7 @@ export default function TripBudget() {
                       variant="ghost"
                       size="icon"
                       aria-label={`Delete ${budget.name}`}
+                      disabled={!online}
                       onClick={() =>
                         setConfirm({
                           title: `Delete "${budget.name}"?`,
