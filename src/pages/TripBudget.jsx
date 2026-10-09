@@ -9,6 +9,7 @@ import {
   Pencil,
   Trash2,
   TrendingDown,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -35,6 +36,8 @@ export default function TripBudget() {
   const [selectedBudget, setSelectedBudget] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [formError, setFormError] = useState("");
+  // The amount being typed, for the "over the trip budget" warning
+  const [amountDraft, setAmountDraft] = useState("");
   const queryClient = useQueryClient();
   const online = useOnline();
 
@@ -135,10 +138,10 @@ export default function TripBudget() {
       });
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_, data) => {
       queryClient.invalidateQueries({ queryKey: ["tripBudgets", id] });
       setIsAddOpen(false);
-      toast({ title: "Sub-budget added" });
+      toast(savedToast("Sub-budget added", parseFloat(data.amount) - remainingForSubBudgets));
     },
     onError: (error) => setFormError(`Couldn't add it: ${error.message}`),
   });
@@ -155,11 +158,16 @@ export default function TripBudget() {
         .eq("id", editingBudget.id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_, data) => {
       queryClient.invalidateQueries({ queryKey: ["tripBudgets", id] });
       setIsEditOpen(false);
+      toast(
+        savedToast(
+          "Sub-budget updated",
+          parseFloat(data.amount) - remainingForSubBudgets - (editingBudget?.amount || 0),
+        ),
+      );
       setEditingBudget(null);
-      toast({ title: "Sub-budget updated" });
     },
     onError: (error) => setFormError(`Couldn't save it: ${error.message}`),
   });
@@ -194,37 +202,37 @@ export default function TripBudget() {
   const remainingForSubBudgets = totalBudget - totalSubBudgets;
   const totalSpent = budgets?.totalSpent || 0;
 
-  // Sub-budgets can't add up to more than the trip budget
-  const checkFits = (amount, available) => {
-    if (amount > available) {
-      setFormError(
-        `That's more than is left to allocate. The most you can set is ${formatMoney(Math.max(0, available))}.`,
-      );
-      return false;
-    }
-    setFormError("");
-    return true;
+  // Sub-budgets may add up to more than the trip budget: the form warns, but doesn't block
+  const editAvailable = remainingForSubBudgets + (editingBudget?.amount || 0); // its own amount is free to reuse
+  const overBy = (available) => {
+    const amount = parseFloat(amountDraft);
+    return amount > available ? amount - available : 0;
   };
+
+  // Toast after saving; says so when the sub-budgets now add up to more than the trip budget
+  const savedToast = (title, over) =>
+    over > 0
+      ? {
+          title,
+          description: `Sub-budgets are now ${formatMoney(over)} over the trip budget.`,
+        }
+      : { title };
 
   const handleCreateBudget = (e) => {
     e.preventDefault();
-    const formData = new FormData(e.target);
-    if (!checkFits(parseFloat(formData.get("amount")), remainingForSubBudgets))
-      return;
-    createBudgetMutation.mutate(Object.fromEntries(formData));
+    setFormError("");
+    createBudgetMutation.mutate(Object.fromEntries(new FormData(e.target)));
   };
 
   const handleUpdateBudget = (e) => {
     e.preventDefault();
-    const formData = new FormData(e.target);
-    // Its own current amount is free to reuse
-    const available = remainingForSubBudgets + (editingBudget?.amount || 0);
-    if (!checkFits(parseFloat(formData.get("amount")), available)) return;
-    updateBudgetMutation.mutate(Object.fromEntries(formData));
+    setFormError("");
+    updateBudgetMutation.mutate(Object.fromEntries(new FormData(e.target)));
   };
 
   const openAdd = (open) => {
     setFormError("");
+    setAmountDraft("");
     setIsAddOpen(open);
   };
 
@@ -316,11 +324,13 @@ export default function TripBudget() {
                     step="0.01"
                     placeholder="0.00"
                     required
+                    onChange={(e) => setAmountDraft(e.target.value)}
                   />
-                  <p className="text-xs text-slate-500">
-                    Left to allocate:{" "}
-                    {formatMoney(Math.max(0, remainingForSubBudgets))}
-                  </p>
+                  <LeftToAllocate
+                    available={remainingForSubBudgets}
+                    over={overBy(remainingForSubBudgets)}
+                    tripBudget={totalBudget}
+                  />
                 </div>
                 {formError && (
                   <p role="alert" className="text-sm text-red-600">
@@ -342,7 +352,9 @@ export default function TripBudget() {
                   >
                     {createBudgetMutation.isPending
                       ? "Adding..."
-                      : "Add sub-budget"}
+                      : overBy(remainingForSubBudgets)
+                        ? "Add anyway"
+                        : "Add sub-budget"}
                   </Button>
                 </div>
               </form>
@@ -350,6 +362,21 @@ export default function TripBudget() {
           </Dialog>
         </div>
       </div>
+
+      {remainingForSubBudgets < 0 && (
+        <div
+          role="status"
+          className="mb-4 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 sm:p-4"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <p>
+            <span className="font-semibold">Over the trip budget.</span> The
+            sub-budgets add up to {formatMoney(totalSubBudgets)}, which is{" "}
+            {formatMoney(-remainingForSubBudgets)} more than the trip budget of{" "}
+            {formatMoney(totalBudget)}.
+          </p>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mb-6">
@@ -445,6 +472,7 @@ export default function TripBudget() {
                       disabled={!online}
                       onClick={() => {
                         setFormError("");
+                        setAmountDraft(String(budget.amount ?? ""));
                         setEditingBudget(budget);
                         setIsEditOpen(true);
                       }}
@@ -546,16 +574,14 @@ export default function TripBudget() {
                   step="0.01"
                   defaultValue={editingBudget.amount}
                   required
+                  onChange={(e) => setAmountDraft(e.target.value)}
                 />
-                <p className="text-xs text-slate-500">
-                  Most you can set:{" "}
-                  {formatMoney(
-                    Math.max(
-                      0,
-                      remainingForSubBudgets + (editingBudget.amount || 0),
-                    ),
-                  )}
-                </p>
+                <LeftToAllocate
+                  available={editAvailable}
+                  over={overBy(editAvailable)}
+                  tripBudget={totalBudget}
+                  editing
+                />
               </div>
               {formError && (
                 <p role="alert" className="text-sm text-red-600">
@@ -580,7 +606,9 @@ export default function TripBudget() {
                 >
                   {updateBudgetMutation.isPending
                     ? "Saving..."
-                    : "Save changes"}
+                    : overBy(editAvailable)
+                      ? "Save anyway"
+                      : "Save changes"}
                 </Button>
               </div>
             </form>
@@ -629,6 +657,32 @@ export default function TripBudget() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// Under the amount field: what's left, or a warning when the amount goes past it (saving still works)
+function LeftToAllocate({ available, over, tripBudget, editing = false }) {
+  if (!over)
+    return (
+      <p className="text-xs text-slate-500">
+        Left to allocate{editing ? " (with this one's amount)" : ""}:{" "}
+        {formatMoney(Math.max(0, available))}
+      </p>
+    );
+  return (
+    <p
+      role="status"
+      className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-900"
+    >
+      <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-amber-600" />
+      <span>
+        {available > 0
+          ? `That's ${formatMoney(over)} more than the ${formatMoney(available)} left to allocate.`
+          : `Nothing is left to allocate, so this goes ${formatMoney(over)} over.`}{" "}
+        The sub-budgets will add up to more than the trip budget (
+        {formatMoney(tripBudget)}). You can still save it.
+      </span>
+    </p>
   );
 }
 
